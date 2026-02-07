@@ -17,6 +17,8 @@ const VALID_ACTIONS = [
   "addDNSRecord",
   "deleteDNSRecord",
   "changeNameservers",
+  "syncPrices",
+  "getPricing",
 ];
 
 async function callNameSilo(
@@ -35,9 +37,7 @@ async function callNameSilo(
   console.log(`[namesilo-api] Calling: ${operation}`, params);
   const res = await fetch(url.toString());
   const text = await res.text();
-  console.log(
-    `[namesilo-api] Response for ${operation}: status=${res.status}, length=${text.length}`
-  );
+  console.log(`[namesilo-api] Response for ${operation}: status=${res.status}, length=${text.length}`);
   return text;
 }
 
@@ -49,6 +49,40 @@ function parseXmlValue(xml: string, tag: string): string | null {
 function parseXmlArray(xml: string, tag: string): string[] {
   const matches = [...xml.matchAll(new RegExp(`<${tag}>([^<]*)</${tag}>`, "g"))];
   return matches.map((m) => m[1]);
+}
+
+// Parse NameSilo getPrices XML into structured pricing data
+function parsePricesXml(xml: string): Array<{ tld: string; register: number; renew: number; transfer: number }> {
+  const results: Array<{ tld: string; register: number; renew: number; transfer: number }> = [];
+  
+  // NameSilo getPrices returns XML like:
+  // <com><registration>8.99</registration><renewal>8.99</renewal><transfer>8.39</transfer></com>
+  const tldBlocks = xml.match(/<(\w[\w.-]*)>\s*<registration>[\s\S]*?<\/\1>/g);
+  if (!tldBlocks) return results;
+
+  for (const block of tldBlocks) {
+    const tldMatch = block.match(/^<([\w.-]+)>/);
+    if (!tldMatch) continue;
+    const tld = tldMatch[1];
+    
+    // Skip non-TLD tags
+    if (['reply', 'request', 'namesilo', 'detail', 'code'].includes(tld)) continue;
+
+    const registration = parseXmlValue(block, 'registration');
+    const renewal = parseXmlValue(block, 'renewal');
+    const transfer = parseXmlValue(block, 'transfer');
+
+    if (registration) {
+      results.push({
+        tld: `.${tld}`,
+        register: parseFloat(registration),
+        renew: parseFloat(renewal || registration),
+        transfer: parseFloat(transfer || '0'),
+      });
+    }
+  }
+
+  return results;
 }
 
 serve(async (req) => {
@@ -73,15 +107,14 @@ serve(async (req) => {
     );
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } =
-      await supabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    if (userError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const userId = claimsData.claims.sub;
+    const userId = user.id;
 
     // Get API key
     const NAMESILO_API_KEY = Deno.env.get("NAMESILO_API_KEY");
@@ -89,10 +122,7 @@ serve(async (req) => {
       console.error("NAMESILO_API_KEY is not configured");
       return new Response(
         JSON.stringify({ error: "NameSilo API not configured" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -100,13 +130,8 @@ serve(async (req) => {
 
     if (!action || !VALID_ACTIONS.includes(action)) {
       return new Response(
-        JSON.stringify({
-          error: `Invalid action. Valid: ${VALID_ACTIONS.join(", ")}`,
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        JSON.stringify({ error: `Invalid action. Valid: ${VALID_ACTIONS.join(", ")}` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -122,12 +147,61 @@ serve(async (req) => {
         const code = parseXmlValue(xml, "code");
         const available = xml.includes("<available>");
         const price = parseXmlValue(xml, "price");
-        result = {
-          domain: params.domain,
-          available,
-          price: price ? parseFloat(price) : null,
-          code,
-        };
+        result = { domain: params.domain, available, price: price ? parseFloat(price) : null, code };
+        break;
+      }
+
+      case "getPricing": {
+        // Read pricing from DB (no admin check - RLS handles visibility)
+        const { data: pricing } = await supabase
+          .from("domain_pricing")
+          .select("*")
+          .eq("is_enabled", true)
+          .order("tld");
+        result = { pricing: pricing || [] };
+        break;
+      }
+
+      case "syncPrices": {
+        // Admin-only: sync prices from NameSilo
+        const serviceClient = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+        );
+
+        // Check admin role
+        const { data: roleCheck } = await serviceClient.rpc("has_role", {
+          _user_id: userId,
+          _role: "admin",
+        });
+        if (!roleCheck) {
+          return new Response(JSON.stringify({ error: "Admin access required" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const xml = await callNameSilo(NAMESILO_API_KEY, "getPrices");
+        const prices = parsePricesXml(xml);
+        console.log(`[namesilo-api] Parsed ${prices.length} TLD prices`);
+
+        let synced = 0;
+        for (const p of prices) {
+          const { error } = await serviceClient.from("domain_pricing").upsert(
+            {
+              tld: p.tld,
+              register_price: p.register,
+              renew_price: p.renew,
+              transfer_price: p.transfer,
+              currency: "USD",
+              last_synced_at: new Date().toISOString(),
+            },
+            { onConflict: "tld" }
+          );
+          if (!error) synced++;
+        }
+
+        result = { synced, total: prices.length };
         break;
       }
 
@@ -138,21 +212,14 @@ serve(async (req) => {
           private: "1",
           auto_renew: "0",
         };
-        // Optional nameservers
         if (params.ns1) registerParams.ns1 = params.ns1;
         if (params.ns2) registerParams.ns2 = params.ns2;
 
         const xml = await callNameSilo(NAMESILO_API_KEY, "registerDomain", registerParams);
         const code = parseXmlValue(xml, "code");
         const detail = parseXmlValue(xml, "detail");
-        result = {
-          domain: params.domain,
-          success: code === "300",
-          code,
-          detail,
-        };
+        result = { domain: params.domain, success: code === "300", code, detail };
 
-        // If successful, store in DB
         if (code === "300") {
           const serviceClient = createClient(
             Deno.env.get("SUPABASE_URL")!,

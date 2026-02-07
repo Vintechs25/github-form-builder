@@ -58,6 +58,57 @@ export type Database = {
           },
         ]
       }
+      domain_pricing: {
+        Row: {
+          created_at: string
+          currency: string
+          id: string
+          is_enabled: boolean
+          last_synced_at: string | null
+          markup_percent: number
+          register_price: number
+          renew_price: number
+          sell_price_register: number | null
+          sell_price_renew: number | null
+          sell_price_transfer: number | null
+          tld: string
+          transfer_price: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          id?: string
+          is_enabled?: boolean
+          last_synced_at?: string | null
+          markup_percent?: number
+          register_price?: number
+          renew_price?: number
+          sell_price_register?: number | null
+          sell_price_renew?: number | null
+          sell_price_transfer?: number | null
+          tld: string
+          transfer_price?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          id?: string
+          is_enabled?: boolean
+          last_synced_at?: string | null
+          markup_percent?: number
+          register_price?: number
+          renew_price?: number
+          sell_price_register?: number | null
+          sell_price_renew?: number | null
+          sell_price_transfer?: number | null
+          tld?: string
+          transfer_price?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       domains: {
         Row: {
           created_at: string
