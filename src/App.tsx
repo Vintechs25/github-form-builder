@@ -7,8 +7,18 @@ import { AuthProvider } from "@/hooks/useAuth";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
-import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
+import DashboardLayout from "./components/dashboard/DashboardLayout";
+import Overview from "./pages/dashboard/Overview";
+import Websites from "./pages/dashboard/Websites";
+import Domains from "./pages/dashboard/Domains";
+import Databases from "./pages/dashboard/Databases";
+import FileManager from "./pages/dashboard/FileManager";
+import EmailAccounts from "./pages/dashboard/EmailAccounts";
+import Security from "./pages/dashboard/Security";
+import Billing from "./pages/dashboard/Billing";
+import Support from "./pages/dashboard/Support";
+import SettingsPage from "./pages/dashboard/SettingsPage";
 
 const queryClient = new QueryClient();
 
@@ -27,11 +37,21 @@ const App = () => (
               path="/dashboard"
               element={
                 <ProtectedRoute>
-                  <Dashboard />
+                  <DashboardLayout />
                 </ProtectedRoute>
               }
-            />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            >
+              <Route index element={<Overview />} />
+              <Route path="websites" element={<Websites />} />
+              <Route path="domains" element={<Domains />} />
+              <Route path="databases" element={<Databases />} />
+              <Route path="files" element={<FileManager />} />
+              <Route path="email" element={<EmailAccounts />} />
+              <Route path="security" element={<Security />} />
+              <Route path="billing" element={<Billing />} />
+              <Route path="support" element={<Support />} />
+              <Route path="settings" element={<SettingsPage />} />
+            </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
