@@ -63,7 +63,7 @@ const AdminSettings = () => {
     setConfigStatus(prev => ({ ...prev, checkingVps: true }));
     try {
       const { data, error } = await supabase.functions.invoke("vps-api", {
-        body: { action: "ssl", domain: "test-ping.com" },
+        body: { action: "verify" },
       });
       // If we get a response (even error from VPS) the key is configured
       setConfigStatus(prev => ({
