@@ -62,8 +62,12 @@ serve(async (req) => {
       );
     }
 
-    const VPS_API_URL =
+    let VPS_API_URL =
       Deno.env.get("VPS_API_URL") || "https://panel.vin-tech.top/api";
+    // Ensure URL has a protocol
+    if (!/^https?:\/\//i.test(VPS_API_URL)) {
+      VPS_API_URL = `https://${VPS_API_URL}`;
+    }
 
     // Parse request
     const { action, ...params } = await req.json();
