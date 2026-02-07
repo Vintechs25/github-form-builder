@@ -80,6 +80,18 @@ const Websites = () => {
         </Dialog>
       </div>
 
+      <div className="bg-accent/5 border border-accent/20 rounded-lg p-4 flex items-start gap-3">
+        <Globe className="w-5 h-5 text-accent mt-0.5 shrink-0" />
+        <div className="text-sm">
+          <p className="font-medium text-foreground">Point your domains to our nameservers</p>
+          <p className="text-muted-foreground mt-1">
+            For hosting to be active, set your domain's nameservers to:
+            <span className="font-mono font-semibold text-foreground ml-1">ns1.vintechdev.store</span> and
+            <span className="font-mono font-semibold text-foreground ml-1">ns2.vintechdev.store</span>
+          </p>
+        </div>
+      </div>
+
       {loading ? (
         <div className="text-center py-12 text-muted-foreground">Loading...</div>
       ) : accounts.length === 0 ? (
