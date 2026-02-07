@@ -14,6 +14,272 @@ export type Database = {
   }
   public: {
     Tables: {
+      domains: {
+        Row: {
+          created_at: string
+          domain_name: string
+          domain_type: string
+          expires_at: string | null
+          hosting_account_id: string | null
+          id: string
+          nameserver_1: string | null
+          nameserver_2: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          domain_name: string
+          domain_type?: string
+          expires_at?: string | null
+          hosting_account_id?: string | null
+          id?: string
+          nameserver_1?: string | null
+          nameserver_2?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          domain_name?: string
+          domain_type?: string
+          expires_at?: string | null
+          hosting_account_id?: string | null
+          id?: string
+          nameserver_1?: string | null
+          nameserver_2?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "domains_hosting_account_id_fkey"
+            columns: ["hosting_account_id"]
+            isOneToOne: false
+            referencedRelation: "hosting_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hosting_accounts: {
+        Row: {
+          bandwidth_used_mb: number
+          cpanel_username: string | null
+          created_at: string
+          domain: string
+          expires_at: string | null
+          ftp_username: string | null
+          hosting_type: string
+          id: string
+          plan_id: string | null
+          ssl_enabled: boolean
+          status: string
+          storage_used_mb: number
+          updated_at: string
+          user_id: string
+          wordpress_url: string | null
+        }
+        Insert: {
+          bandwidth_used_mb?: number
+          cpanel_username?: string | null
+          created_at?: string
+          domain: string
+          expires_at?: string | null
+          ftp_username?: string | null
+          hosting_type?: string
+          id?: string
+          plan_id?: string | null
+          ssl_enabled?: boolean
+          status?: string
+          storage_used_mb?: number
+          updated_at?: string
+          user_id: string
+          wordpress_url?: string | null
+        }
+        Update: {
+          bandwidth_used_mb?: number
+          cpanel_username?: string | null
+          created_at?: string
+          domain?: string
+          expires_at?: string | null
+          ftp_username?: string | null
+          hosting_type?: string
+          id?: string
+          plan_id?: string | null
+          ssl_enabled?: boolean
+          status?: string
+          storage_used_mb?: number
+          updated_at?: string
+          user_id?: string
+          wordpress_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hosting_accounts_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "hosting_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hosting_databases: {
+        Row: {
+          created_at: string
+          db_host: string
+          db_name: string
+          db_port: number
+          db_username: string
+          hosting_account_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          db_host?: string
+          db_name: string
+          db_port?: number
+          db_username: string
+          hosting_account_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          db_host?: string
+          db_name?: string
+          db_port?: number
+          db_username?: string
+          hosting_account_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hosting_databases_hosting_account_id_fkey"
+            columns: ["hosting_account_id"]
+            isOneToOne: false
+            referencedRelation: "hosting_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hosting_plans: {
+        Row: {
+          bandwidth_mb: number
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          max_databases: number
+          max_domains: number
+          max_email_accounts: number
+          name: string
+          price_monthly: number
+          price_yearly: number | null
+          slug: string
+          storage_mb: number
+          updated_at: string
+          wordpress_enabled: boolean
+        }
+        Insert: {
+          bandwidth_mb?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          max_databases?: number
+          max_domains?: number
+          max_email_accounts?: number
+          name: string
+          price_monthly?: number
+          price_yearly?: number | null
+          slug: string
+          storage_mb?: number
+          updated_at?: string
+          wordpress_enabled?: boolean
+        }
+        Update: {
+          bandwidth_mb?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          max_databases?: number
+          max_domains?: number
+          max_email_accounts?: number
+          name?: string
+          price_monthly?: number
+          price_yearly?: number | null
+          slug?: string
+          storage_mb?: number
+          updated_at?: string
+          wordpress_enabled?: boolean
+        }
+        Relationships: []
+      }
+      invoices: {
+        Row: {
+          amount: number
+          created_at: string
+          currency: string
+          description: string | null
+          due_date: string
+          hosting_account_id: string | null
+          id: string
+          invoice_number: string
+          paid_at: string | null
+          payment_gateway: string | null
+          payment_reference: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          currency?: string
+          description?: string | null
+          due_date: string
+          hosting_account_id?: string | null
+          id?: string
+          invoice_number: string
+          paid_at?: string | null
+          payment_gateway?: string | null
+          payment_reference?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          description?: string | null
+          due_date?: string
+          hosting_account_id?: string | null
+          id?: string
+          invoice_number?: string
+          paid_at?: string | null
+          payment_gateway?: string | null
+          payment_reference?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_hosting_account_id_fkey"
+            columns: ["hosting_account_id"]
+            isOneToOne: false
+            referencedRelation: "hosting_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -43,6 +309,74 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      support_tickets: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          priority: string
+          status: string
+          subject: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          id?: string
+          priority?: string
+          status?: string
+          subject: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          priority?: string
+          status?: string
+          subject?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ticket_messages: {
+        Row: {
+          created_at: string
+          id: string
+          is_staff_reply: boolean
+          message: string
+          ticket_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_staff_reply?: boolean
+          message: string
+          ticket_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_staff_reply?: boolean
+          message?: string
+          ticket_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
