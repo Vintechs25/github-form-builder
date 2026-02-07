@@ -16,7 +16,9 @@ interface TldPricing {
   renew_price: number;
   transfer_price: number;
   currency: string;
+  markup_type: string;
   markup_percent: number;
+  markup_fixed: number;
   sell_price_register: number;
   sell_price_renew: number;
   sell_price_transfer: number;
@@ -30,6 +32,7 @@ const AdminDomainPricing = () => {
   const [syncing, setSyncing] = useState(false);
   const [search, setSearch] = useState("");
   const [editingMarkup, setEditingMarkup] = useState<Record<string, string>>({});
+  const [editingFixed, setEditingFixed] = useState<Record<string, string>>({});
 
   const fetchPricing = async () => {
     const { data } = await supabase
@@ -72,6 +75,23 @@ const AdminDomainPricing = () => {
     fetchPricing();
   };
 
+  const handleFixedSave = async (id: string) => {
+    const val = parseFloat(editingFixed[id]);
+    if (isNaN(val) || val < 0) { toast.error("Invalid amount"); return; }
+    const { error } = await supabase.from("domain_pricing").update({ markup_fixed: val }).eq("id", id);
+    if (error) { toast.error("Failed to update"); return; }
+    toast.success("Fixed markup updated");
+    setEditingFixed((prev) => { const n = { ...prev }; delete n[id]; return n; });
+    fetchPricing();
+  };
+
+  const handleTypeToggle = async (id: string, currentType: string) => {
+    const newType = currentType === "percent" ? "fixed" : "percent";
+    await supabase.from("domain_pricing").update({ markup_type: newType }).eq("id", id);
+    setPricing((prev) => prev.map((p) => (p.id === id ? { ...p, markup_type: newType } : p)));
+    fetchPricing();
+  };
+
   const filtered = pricing.filter((p) => !search || p.tld.toLowerCase().includes(search.toLowerCase()));
   const enabledCount = pricing.filter((p) => p.is_enabled).length;
 
@@ -103,7 +123,8 @@ const AdminDomainPricing = () => {
               <TableHead>Cost (Register)</TableHead>
               <TableHead>Cost (Renew)</TableHead>
               <TableHead>Cost (Transfer)</TableHead>
-              <TableHead>Markup %</TableHead>
+              <TableHead>Markup Type</TableHead>
+              <TableHead>Markup Value</TableHead>
               <TableHead>Sell (Register)</TableHead>
               <TableHead>Sell (Renew)</TableHead>
               <TableHead>Enabled</TableHead>
@@ -113,11 +134,11 @@ const AdminDomainPricing = () => {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Loading...</TableCell>
+                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Loading...</TableCell>
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                   {pricing.length === 0 ? 'No pricing data. Click "Sync from NameSilo" to import.' : "No matching TLDs"}
                 </TableCell>
               </TableRow>
@@ -129,21 +150,45 @@ const AdminDomainPricing = () => {
                   <TableCell>${p.renew_price.toFixed(2)}</TableCell>
                   <TableCell>${p.transfer_price.toFixed(2)}</TableCell>
                   <TableCell>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => handleTypeToggle(p.id, p.markup_type)}
+                    >
+                      {p.markup_type === "percent" ? "%" : "$"}
+                    </Button>
+                  </TableCell>
+                  <TableCell>
                     <div className="flex items-center gap-1">
-                      <Input
-                        className="w-20 h-8 text-sm"
-                        type="number"
-                        min="0"
-                        value={editingMarkup[p.id] ?? p.markup_percent}
-                        onChange={(e) => setEditingMarkup((prev) => ({ ...prev, [p.id]: e.target.value }))}
-                        onBlur={() => {
-                          if (editingMarkup[p.id] !== undefined) handleMarkupSave(p.id);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && editingMarkup[p.id] !== undefined) handleMarkupSave(p.id);
-                        }}
-                      />
-                      <span className="text-muted-foreground text-xs">%</span>
+                      {p.markup_type === "percent" ? (
+                        <>
+                          <Input
+                            className="w-20 h-8 text-sm"
+                            type="number"
+                            min="0"
+                            value={editingMarkup[p.id] ?? p.markup_percent}
+                            onChange={(e) => setEditingMarkup((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                            onBlur={() => { if (editingMarkup[p.id] !== undefined) handleMarkupSave(p.id); }}
+                            onKeyDown={(e) => { if (e.key === "Enter" && editingMarkup[p.id] !== undefined) handleMarkupSave(p.id); }}
+                          />
+                          <span className="text-muted-foreground text-xs">%</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-muted-foreground text-xs">$</span>
+                          <Input
+                            className="w-20 h-8 text-sm"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={editingFixed[p.id] ?? p.markup_fixed}
+                            onChange={(e) => setEditingFixed((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                            onBlur={() => { if (editingFixed[p.id] !== undefined) handleFixedSave(p.id); }}
+                            onKeyDown={(e) => { if (e.key === "Enter" && editingFixed[p.id] !== undefined) handleFixedSave(p.id); }}
+                          />
+                        </>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="font-semibold text-accent">${p.sell_price_register.toFixed(2)}</TableCell>

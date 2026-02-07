@@ -65,7 +65,9 @@ export type Database = {
           id: string
           is_enabled: boolean
           last_synced_at: string | null
+          markup_fixed: number
           markup_percent: number
+          markup_type: string
           register_price: number
           renew_price: number
           sell_price_register: number | null
@@ -81,7 +83,9 @@ export type Database = {
           id?: string
           is_enabled?: boolean
           last_synced_at?: string | null
+          markup_fixed?: number
           markup_percent?: number
+          markup_type?: string
           register_price?: number
           renew_price?: number
           sell_price_register?: number | null
@@ -97,7 +101,9 @@ export type Database = {
           id?: string
           is_enabled?: boolean
           last_synced_at?: string | null
+          markup_fixed?: number
           markup_percent?: number
+          markup_type?: string
           register_price?: number
           renew_price?: number
           sell_price_register?: number | null
