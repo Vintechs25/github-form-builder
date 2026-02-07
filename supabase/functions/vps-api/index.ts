@@ -67,14 +67,10 @@ serve(async (req) => {
     }
 
     let VPS_API_URL =
-      Deno.env.get("VPS_API_URL") || "https://panel.vin-tech.top/api";
+      Deno.env.get("VPS_API_URL") || "http://panel.vintechcyber.com:8091/api";
     // Ensure protocol exists
     if (!/^https?:\/\//i.test(VPS_API_URL)) {
       VPS_API_URL = `http://${VPS_API_URL}`;
-    }
-    // CyberPanel typically uses self-signed certs, force http on port 8090
-    if (/:8090/.test(VPS_API_URL)) {
-      VPS_API_URL = VPS_API_URL.replace(/^https:/i, "http:");
     }
     // Remove trailing slash to avoid double slashes
     VPS_API_URL = VPS_API_URL.replace(/\/+$/, "");
