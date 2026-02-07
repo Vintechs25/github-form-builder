@@ -67,7 +67,7 @@ serve(async (req) => {
     }
 
     let VPS_API_URL =
-      Deno.env.get("VPS_API_URL") || "http://panel.vintechcyber.com:8091/api";
+      Deno.env.get("VPS_API_URL") || "https://panel.vintechcyber.com:8090/api";
     // Ensure protocol exists
     if (!/^https?:\/\//i.test(VPS_API_URL)) {
       VPS_API_URL = `http://${VPS_API_URL}`;
