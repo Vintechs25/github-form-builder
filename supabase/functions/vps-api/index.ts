@@ -7,15 +7,18 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const VALID_ACTIONS = [
-  "create-account",
-  "suspend",
-  "unsuspend",
-  "delete",
-  "create-db",
-  "create-email",
-  "ssl",
-];
+// Map our action names to CyberPanel API endpoint names
+const ACTION_TO_ENDPOINT: Record<string, string> = {
+  "create-account": "createWebsite",
+  "suspend": "suspendWebsite",
+  "unsuspend": "UnsuspendWebsite",
+  "delete": "deleteWebsite",
+  "create-db": "createDatabase",
+  "create-email": "createEmailAccount",
+  "ssl": "issueSSL",
+};
+
+const VALID_ACTIONS = Object.keys(ACTION_TO_ENDPOINT);
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -90,14 +93,15 @@ serve(async (req) => {
       );
     }
 
-    const finalUrl = `${VPS_API_URL}/${action}`;
+    const endpoint = ACTION_TO_ENDPOINT[action];
+    const finalUrl = `${VPS_API_URL}/${endpoint}`;
     console.log(
-      `[vps-api] User ${userId} requesting action: ${action}, URL: ${finalUrl}`,
+      `[vps-api] User ${userId} requesting action: ${action}, endpoint: ${endpoint}, URL: ${finalUrl}`,
       params
     );
 
     // Forward to VPS API
-    const vpsResponse = await fetch(`${VPS_API_URL}/${action}`, {
+    const vpsResponse = await fetch(finalUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
