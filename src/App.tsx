@@ -19,6 +19,10 @@ import Security from "./pages/dashboard/Security";
 import Billing from "./pages/dashboard/Billing";
 import Support from "./pages/dashboard/Support";
 import SettingsPage from "./pages/dashboard/SettingsPage";
+import BuyHosting from "./pages/dashboard/BuyHosting";
+import SearchDomain from "./pages/dashboard/SearchDomain";
+import DnsManager from "./pages/dashboard/DnsManager";
+import Orders from "./pages/dashboard/Orders";
 
 const queryClient = new QueryClient();
 
@@ -51,6 +55,10 @@ const App = () => (
               <Route path="billing" element={<Billing />} />
               <Route path="support" element={<Support />} />
               <Route path="settings" element={<SettingsPage />} />
+              <Route path="buy-hosting" element={<BuyHosting />} />
+              <Route path="search-domain" element={<SearchDomain />} />
+              <Route path="domains/:id/dns" element={<DnsManager />} />
+              <Route path="orders" element={<Orders />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, Outlet } from "react-router-dom";
 import {
   Server, Globe, Database, Upload, Mail, Shield, Settings, LogOut,
   Menu, X, Home, CreditCard, HelpCircle, LayoutGrid, Loader2,
+  ShoppingBag, Search, Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,11 +13,14 @@ import { toast } from "sonner";
 const navItems = [
   { icon: Home, label: "Overview", path: "/dashboard" },
   { icon: Globe, label: "Websites", path: "/dashboard/websites" },
+  { icon: Package, label: "Buy Hosting", path: "/dashboard/buy-hosting" },
   { icon: LayoutGrid, label: "Domains", path: "/dashboard/domains" },
+  { icon: Search, label: "Search Domains", path: "/dashboard/search-domain" },
   { icon: Database, label: "Databases", path: "/dashboard/databases" },
   { icon: Upload, label: "File Manager", path: "/dashboard/files" },
   { icon: Mail, label: "Email", path: "/dashboard/email" },
   { icon: Shield, label: "SSL / Security", path: "/dashboard/security" },
+  { icon: ShoppingBag, label: "Orders", path: "/dashboard/orders" },
   { icon: CreditCard, label: "Billing", path: "/dashboard/billing" },
   { icon: HelpCircle, label: "Support", path: "/dashboard/support" },
   { icon: Settings, label: "Settings", path: "/dashboard/settings" },
