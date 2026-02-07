@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.process-order]
 verify_jwt = false
+
+[functions.check-dns]
+verify_jwt = false
