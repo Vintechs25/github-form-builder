@@ -9,13 +9,13 @@ const corsHeaders = {
 
 // Map our action names to CyberPanel API endpoint names
 const ACTION_TO_ENDPOINT: Record<string, string> = {
-  "create-account": "createWebsite",
-  "suspend": "suspendWebsite",
-  "unsuspend": "UnsuspendWebsite",
-  "delete": "deleteWebsite",
-  "create-db": "createDatabase",
-  "create-email": "createEmailAccount",
-  "ssl": "issueSSL",
+  "create-account": "submitWebsiteCreation",
+  "suspend": "submitWebsiteStatus",
+  "unsuspend": "submitWebsiteStatus",
+  "delete": "submitWebsiteDeletion",
+  "create-db": "submitDBCreation",
+  "create-email": "submitEmailCreation",
+  "ssl": "issueSSLForHostName",
 };
 
 const VALID_ACTIONS = Object.keys(ACTION_TO_ENDPOINT);
@@ -52,12 +52,13 @@ serve(async (req) => {
     }
     const userId = claimsData.claims.sub;
 
-    // Get secrets
-    const VPS_API_KEY = Deno.env.get("VPS_API_KEY");
-    if (!VPS_API_KEY) {
-      console.error("VPS_API_KEY is not configured");
+    // Get CyberPanel credentials
+    const CYBERPANEL_USER = Deno.env.get("CYBERPANEL_USER");
+    const CYBERPANEL_PASS = Deno.env.get("CYBERPANEL_PASS");
+    if (!CYBERPANEL_USER || !CYBERPANEL_PASS) {
+      console.error("CyberPanel credentials not configured");
       return new Response(
-        JSON.stringify({ error: "VPS API not configured" }),
+        JSON.stringify({ error: "CyberPanel credentials not configured" }),
         {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -100,14 +101,28 @@ serve(async (req) => {
       params
     );
 
-    // Forward to VPS API
+    // Forward to CyberPanel API with adminUser/adminPass auth
+    const bodyPayload = {
+      adminUser: CYBERPANEL_USER,
+      adminPass: CYBERPANEL_PASS,
+      ...params,
+    };
+
+    // Map domain param to CyberPanel's expected field name based on action
+    if (params.domain && action === "ssl") {
+      bodyPayload.virtualHostName = params.domain;
+    } else if (params.domain) {
+      bodyPayload.domainName = params.domain;
+    }
+
+    console.log(`[vps-api] Sending to CyberPanel:`, { ...bodyPayload, adminPass: "***" });
+
     const vpsResponse = await fetch(finalUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${VPS_API_KEY}`,
       },
-      body: JSON.stringify({ ...params, user_id: userId }),
+      body: JSON.stringify(bodyPayload),
     });
 
     const responseText = await vpsResponse.text();
