@@ -8,14 +8,13 @@ const corsHeaders = {
 };
 
 // Map our action names to CyberPanel API endpoint names
+// Source: https://github.com/usmannasir/cyberpanel/blob/stable/api/urls.py
 const ACTION_TO_ENDPOINT: Record<string, string> = {
-  "create-account": "submitWebsiteCreation",
+  "create-account": "createWebsite",
   "suspend": "submitWebsiteStatus",
   "unsuspend": "submitWebsiteStatus",
-  "delete": "submitWebsiteDeletion",
-  "create-db": "submitDBCreation",
-  "create-email": "submitEmailCreation",
-  "ssl": "issueSSLForHostName",
+  "delete": "deleteWebsite",
+  "verify": "verifyConn",
 };
 
 const VALID_ACTIONS = Object.keys(ACTION_TO_ENDPOINT);
@@ -97,18 +96,33 @@ serve(async (req) => {
       params
     );
 
-    // Forward to CyberPanel API with adminUser/adminPass auth
-    const bodyPayload = {
+    // Build CyberPanel-compatible payload
+    const bodyPayload: Record<string, unknown> = {
       adminUser: CYBERPANEL_USER,
       adminPass: CYBERPANEL_PASS,
-      ...params,
     };
 
-    // Map domain param to CyberPanel's expected field name based on action
-    if (params.domain && action === "ssl") {
-      bodyPayload.virtualHostName = params.domain;
-    } else if (params.domain) {
+    if (action === "create-account") {
+      // CyberPanel createWebsite requires: domainName, ownerEmail, packageName, websiteOwner, ownerPassword
       bodyPayload.domainName = params.domain;
+      bodyPayload.ownerEmail = params.ownerEmail || `admin@${params.domain}`;
+      bodyPayload.packageName = params.package || "Default";
+      bodyPayload.websiteOwner = params.websiteOwner || "admin";
+      bodyPayload.ownerPassword = params.ownerPassword || crypto.randomUUID().slice(0, 16);
+      if (params.phpSelection) bodyPayload.phpSelection = params.phpSelection;
+    } else if (action === "suspend") {
+      bodyPayload.websiteName = params.domain;
+      bodyPayload.state = "Suspend";
+    } else if (action === "unsuspend") {
+      bodyPayload.websiteName = params.domain;
+      bodyPayload.state = "Activate";
+    } else if (action === "delete") {
+      bodyPayload.domainName = params.domain;
+    } else if (action === "verify") {
+      // verifyConn only needs adminUser + adminPass
+    } else {
+      // Pass through any extra params
+      Object.assign(bodyPayload, params);
     }
 
     console.log(`[vps-api] Sending to CyberPanel:`, { ...bodyPayload, adminPass: "***" });
