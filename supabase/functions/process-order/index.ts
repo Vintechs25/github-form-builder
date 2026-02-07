@@ -47,7 +47,6 @@ serve(async (req) => {
       });
     }
 
-    // Use service role for DB operations
     const serviceClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -72,101 +71,92 @@ serve(async (req) => {
     if (order.status !== "paid") {
       return new Response(
         JSON.stringify({ error: "Order is not in paid status" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     console.log(`[process-order] Processing order ${order_id}, type=${order.type}`);
-
     const results: Record<string, unknown> = { order_id };
 
+    // ─── HOSTING ORDER ─────────────────────────────────────────────
     if (order.type === "hosting") {
-      // Provision hosting via VPS API
-      const VPS_API_KEY = Deno.env.get("VPS_API_KEY");
-      const VPS_API_URL =
-        Deno.env.get("VPS_API_URL") || "https://panel.vin-tech.top/api";
+      const domain = order.domain_name || `user-${userId.substring(0, 8)}.vintechdev.store`;
 
-      if (!VPS_API_KEY) {
-        console.error("[process-order] VPS_API_KEY not configured");
-        results.hosting = { error: "VPS API not configured" };
-      } else {
-        try {
-          // Get package details
-          let packageSlug = "starter";
-          if (order.package_id) {
-            const { data: plan } = await serviceClient
-              .from("hosting_plans")
-              .select("slug")
-              .eq("id", order.package_id)
-              .single();
-            if (plan) packageSlug = plan.slug;
-          }
-
-          const vpsRes = await fetch(`${VPS_API_URL}/create-account`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${VPS_API_KEY}`,
-            },
-            body: JSON.stringify({
-              user_id: userId,
-              domain: order.domain_name || `user-${userId.substring(0, 8)}.vin-tech.top`,
-              package: packageSlug,
-            }),
-          });
-
-          const vpsText = await vpsRes.text();
-          let vpsData;
-          try {
-            vpsData = JSON.parse(vpsText);
-          } catch {
-            vpsData = { raw: vpsText };
-          }
-
-          console.log("[process-order] VPS create-account response:", vpsData);
-
-          if (vpsRes.ok) {
-            // Create hosting account record
-            await serviceClient.from("hosting_accounts").insert({
-              user_id: userId,
-              plan_id: order.package_id,
-              domain: order.domain_name || `user-${userId.substring(0, 8)}.vin-tech.top`,
-              status: "active",
-              cpanel_username: vpsData.username || null,
-              ftp_username: vpsData.ftp_username || null,
-            });
-
-            // Issue SSL
-            await fetch(`${VPS_API_URL}/ssl`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${VPS_API_KEY}`,
-              },
-              body: JSON.stringify({
-                domain: order.domain_name,
-                user_id: userId,
-              }),
-            });
-
-            results.hosting = { success: true, data: vpsData };
-          } else {
-            results.hosting = { error: "VPS provisioning failed", details: vpsData };
-          }
-        } catch (err) {
-          console.error("[process-order] VPS error:", err);
-          results.hosting = {
-            error: err instanceof Error ? err.message : "VPS error",
-          };
+      // Get plan details
+      let planName = "Default";
+      let hostingType = "file_upload";
+      if (order.package_id) {
+        const { data: plan } = await serviceClient
+          .from("hosting_plans")
+          .select("slug, name, wordpress_enabled")
+          .eq("id", order.package_id)
+          .single();
+        if (plan) {
+          planName = plan.name || plan.slug;
+          hostingType = plan.wordpress_enabled ? "wordpress" : "file_upload";
         }
       }
+
+      // Check if hosting account already exists for this domain+user
+      const { data: existingAccount } = await serviceClient
+        .from("hosting_accounts")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("domain", domain)
+        .maybeSingle();
+
+      if (existingAccount) {
+        // Update existing account to pending_dns (paid, waiting for DNS)
+        await serviceClient
+          .from("hosting_accounts")
+          .update({ status: "pending_dns", plan_id: order.package_id })
+          .eq("id", existingAccount.id);
+        results.hosting = { success: true, status: "pending_dns", account_id: existingAccount.id };
+      } else {
+        // Create hosting account in pending_dns status
+        // Actual CyberPanel provisioning happens via check-dns when nameservers are confirmed
+        const { data: newAccount, error: insertErr } = await serviceClient
+          .from("hosting_accounts")
+          .insert({
+            user_id: userId,
+            plan_id: order.package_id,
+            domain,
+            status: "pending_dns",
+            hosting_type: hostingType,
+          })
+          .select()
+          .single();
+
+        if (insertErr) {
+          console.error("[process-order] Failed to create hosting account:", insertErr);
+          results.hosting = { error: insertErr.message };
+        } else {
+          results.hosting = { success: true, status: "pending_dns", account_id: newAccount.id };
+        }
+      }
+
+      // Ensure domain record exists
+      const { data: existingDomain } = await serviceClient
+        .from("domains")
+        .select("id")
+        .eq("domain_name", domain)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (!existingDomain) {
+        await serviceClient.from("domains").insert({
+          user_id: userId,
+          domain_name: domain,
+          domain_type: "primary",
+          status: "pending",
+        });
+      }
+
+      console.log(`[process-order] Hosting set to pending_dns for ${domain}`);
     }
 
+    // ─── DOMAIN ORDER ───────────────────────────────────────────────
     if (order.type === "domain") {
-      // Register domain via NameSilo
       const NAMESILO_API_KEY = Deno.env.get("NAMESILO_API_KEY");
 
       if (!NAMESILO_API_KEY) {
@@ -174,9 +164,7 @@ serve(async (req) => {
         results.domain = { error: "NameSilo API not configured" };
       } else if (order.domain_name) {
         try {
-          const nsUrl = new URL(
-            "https://www.namesilo.com/api/registerDomain"
-          );
+          const nsUrl = new URL("https://www.namesilo.com/api/registerDomain");
           nsUrl.searchParams.set("version", "1");
           nsUrl.searchParams.set("type", "xml");
           nsUrl.searchParams.set("key", NAMESILO_API_KEY);
@@ -184,36 +172,35 @@ serve(async (req) => {
           nsUrl.searchParams.set("years", "1");
           nsUrl.searchParams.set("private", "1");
           nsUrl.searchParams.set("auto_renew", "0");
+          // Point to our nameservers on registration
+          nsUrl.searchParams.set("ns1", "ns1.vintechdev.store");
+          nsUrl.searchParams.set("ns2", "ns2.vintechdev.store");
 
           const nsRes = await fetch(nsUrl.toString());
           const nsText = await nsRes.text();
           const codeMatch = nsText.match(/<code>(\d+)<\/code>/);
           const code = codeMatch ? codeMatch[1] : null;
 
-          console.log(
-            `[process-order] NameSilo register response: code=${code}`
-          );
+          console.log(`[process-order] NameSilo register: code=${code}`);
 
           if (code === "300") {
-            await serviceClient.from("domains").insert({
+            await serviceClient.from("domains").upsert({
               user_id: userId,
               domain_name: order.domain_name,
               domain_type: "registered",
               registrar: "namesilo",
               status: "active",
-              expires_at: new Date(
-                Date.now() + 365 * 24 * 60 * 60 * 1000
-              ).toISOString(),
-            });
+              nameserver_1: "ns1.vintechdev.store",
+              nameserver_2: "ns2.vintechdev.store",
+              expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+            }, { onConflict: "domain_name,user_id" });
             results.domain = { success: true };
           } else {
             results.domain = { error: "Domain registration failed", code };
           }
         } catch (err) {
           console.error("[process-order] NameSilo error:", err);
-          results.domain = {
-            error: err instanceof Error ? err.message : "NameSilo error",
-          };
+          results.domain = { error: err instanceof Error ? err.message : "NameSilo error" };
         }
       }
     }
@@ -228,10 +215,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ success: true, data: results }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("[process-order] Error:", error);
