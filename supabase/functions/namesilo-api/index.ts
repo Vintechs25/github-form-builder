@@ -211,9 +211,9 @@ serve(async (req) => {
           years: String(params.years || 1),
           private: "1",
           auto_renew: "0",
+          ns1: "ns1.vintechdev.store",
+          ns2: "ns2.vintechdev.store",
         };
-        if (params.ns1) registerParams.ns1 = params.ns1;
-        if (params.ns2) registerParams.ns2 = params.ns2;
 
         const xml = await callNameSilo(NAMESILO_API_KEY, "registerDomain", registerParams);
         const code = parseXmlValue(xml, "code");
@@ -231,6 +231,8 @@ serve(async (req) => {
             domain_type: "registered",
             registrar: "namesilo",
             status: "active",
+            nameserver_1: "ns1.vintechdev.store",
+            nameserver_2: "ns2.vintechdev.store",
             expires_at: new Date(
               Date.now() + (params.years || 1) * 365 * 24 * 60 * 60 * 1000
             ).toISOString(),
