@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      dns_records: {
+        Row: {
+          created_at: string
+          domain_id: string
+          host: string
+          id: string
+          ttl: number
+          type: string
+          updated_at: string
+          user_id: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          domain_id: string
+          host?: string
+          id?: string
+          ttl?: number
+          type?: string
+          updated_at?: string
+          user_id: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          domain_id?: string
+          host?: string
+          id?: string
+          ttl?: number
+          type?: string
+          updated_at?: string
+          user_id?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dns_records_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       domains: {
         Row: {
           created_at: string
@@ -24,6 +68,7 @@ export type Database = {
           id: string
           nameserver_1: string | null
           nameserver_2: string | null
+          registrar: string | null
           status: string
           updated_at: string
           user_id: string
@@ -37,6 +82,7 @@ export type Database = {
           id?: string
           nameserver_1?: string | null
           nameserver_2?: string | null
+          registrar?: string | null
           status?: string
           updated_at?: string
           user_id: string
@@ -50,6 +96,7 @@ export type Database = {
           id?: string
           nameserver_1?: string | null
           nameserver_2?: string | null
+          registrar?: string | null
           status?: string
           updated_at?: string
           user_id?: string
@@ -231,6 +278,7 @@ export type Database = {
           hosting_account_id: string | null
           id: string
           invoice_number: string
+          order_id: string | null
           paid_at: string | null
           payment_gateway: string | null
           payment_reference: string | null
@@ -247,6 +295,7 @@ export type Database = {
           hosting_account_id?: string | null
           id?: string
           invoice_number: string
+          order_id?: string | null
           paid_at?: string | null
           payment_gateway?: string | null
           payment_reference?: string | null
@@ -263,6 +312,7 @@ export type Database = {
           hosting_account_id?: string | null
           id?: string
           invoice_number?: string
+          order_id?: string | null
           paid_at?: string | null
           payment_gateway?: string | null
           payment_reference?: string | null
@@ -276,6 +326,60 @@ export type Database = {
             columns: ["hosting_account_id"]
             isOneToOne: false
             referencedRelation: "hosting_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          billing_cycle: string
+          created_at: string
+          domain_name: string | null
+          id: string
+          package_id: string | null
+          status: string
+          total_amount: number
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          billing_cycle?: string
+          created_at?: string
+          domain_name?: string | null
+          id?: string
+          package_id?: string | null
+          status?: string
+          total_amount?: number
+          type?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          billing_cycle?: string
+          created_at?: string
+          domain_name?: string | null
+          id?: string
+          package_id?: string | null
+          status?: string
+          total_amount?: number
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "hosting_plans"
             referencedColumns: ["id"]
           },
         ]
@@ -378,15 +482,80 @@ export type Database = {
           },
         ]
       }
+      transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          invoice_id: string | null
+          method: string
+          reference: string | null
+          user_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          id?: string
+          invoice_id?: string | null
+          method?: string
+          reference?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          invoice_id?: string | null
+          method?: string
+          reference?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "moderator" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -513,6 +682,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "moderator", "user"],
+    },
   },
 } as const
