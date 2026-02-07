@@ -3,10 +3,11 @@ import { Link, useLocation, useNavigate, Outlet } from "react-router-dom";
 import {
   Server, Globe, Database, Upload, Mail, Shield, Settings, LogOut,
   Menu, X, Home, CreditCard, HelpCircle, LayoutGrid, Loader2,
-  ShoppingBag, Search, Package,
+  ShoppingBag, Search, Package, ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -37,6 +38,7 @@ const DashboardLayout = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const { user, signOut } = useAuth();
+  const { isAdmin } = useUserRole();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -117,6 +119,16 @@ const DashboardLayout = () => {
               </Link>
             ))}
           </nav>
+
+          {isAdmin && (
+            <div className="px-3 pb-2">
+              <Link to="/admin" onClick={() => setSidebarOpen(false)}>
+                <Button variant="ghost" size="sm" className="w-full justify-start text-sidebar-foreground/70 hover:text-sidebar-foreground bg-destructive/10 hover:bg-destructive/20">
+                  <ShieldCheck className="w-4 h-4 mr-2 text-destructive" /> Admin Panel
+                </Button>
+              </Link>
+            </div>
+          )}
 
           <div className="p-4 border-t border-sidebar-border">
             <div className="flex items-center gap-3 mb-3">
