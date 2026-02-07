@@ -1,1 +1,10 @@
 project_id = "sdmyvzolennegaropcfw"
+
+[functions.vps-api]
+verify_jwt = false
+
+[functions.namesilo-api]
+verify_jwt = false
+
+[functions.process-order]
+verify_jwt = false
