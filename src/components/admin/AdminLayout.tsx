@@ -19,6 +19,7 @@ const adminNav = [
   { icon: Globe, label: "Domains", path: "/admin/domains" },
   { icon: HelpCircle, label: "Tickets", path: "/admin/tickets" },
   { icon: BarChart3, label: "Reports", path: "/admin/reports" },
+  { icon: Settings, label: "Settings", path: "/admin/settings" },
 ];
 
 const AdminLayout = () => {
