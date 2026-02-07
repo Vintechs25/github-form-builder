@@ -35,6 +35,7 @@ import AdminDomains from "./pages/admin/AdminDomains";
 import AdminTickets from "./pages/admin/AdminTickets";
 import AdminReports from "./pages/admin/AdminReports";
 import AdminSettings from "./pages/admin/AdminSettings";
+import AdminDomainPricing from "./pages/admin/AdminDomainPricing";
 
 const queryClient = new QueryClient();
 
@@ -89,6 +90,7 @@ const App = () => (
               <Route path="orders" element={<AdminOrders />} />
               <Route path="invoices" element={<AdminInvoices />} />
               <Route path="domains" element={<AdminDomains />} />
+              <Route path="domain-pricing" element={<AdminDomainPricing />} />
               <Route path="tickets" element={<AdminTickets />} />
               <Route path="reports" element={<AdminReports />} />
               <Route path="settings" element={<AdminSettings />} />

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, Globe, ShoppingCart, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,10 +10,17 @@ import { Badge } from "@/components/ui/badge";
 
 interface ContextType { user: User | null; }
 
+interface TldPricing {
+  tld: string;
+  sell_price_register: number;
+  sell_price_renew: number;
+}
+
 interface SearchResult {
   domain: string;
   available: boolean;
   price: number | null;
+  renewPrice: number | null;
 }
 
 const SearchDomain = () => {
@@ -23,8 +30,32 @@ const SearchDomain = () => {
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [registering, setRegistering] = useState<string | null>(null);
+  const [tldPricing, setTldPricing] = useState<TldPricing[]>([]);
 
-  const tlds = [".com", ".net", ".org", ".co.ke", ".ke", ".info"];
+  // Load TLD pricing from DB on mount
+  useEffect(() => {
+    supabase
+      .from("domain_pricing")
+      .select("tld, sell_price_register, sell_price_renew")
+      .eq("is_enabled", true)
+      .order("tld")
+      .then(({ data }) => {
+        setTldPricing((data as TldPricing[]) || []);
+      });
+  }, []);
+
+  const getTldPrice = (domain: string): { register: number | null; renew: number | null } => {
+    const tld = domain.substring(domain.indexOf("."));
+    const match = tldPricing.find((p) => p.tld === tld);
+    return match
+      ? { register: match.sell_price_register, renew: match.sell_price_renew }
+      : { register: null, renew: null };
+  };
+
+  // Use enabled TLDs from DB, fallback to defaults
+  const searchTlds = tldPricing.length > 0
+    ? tldPricing.slice(0, 10).map((p) => p.tld)
+    : [".com", ".net", ".org", ".co.ke", ".ke", ".info"];
 
   const handleSearch = async () => {
     if (!query.trim()) return;
@@ -34,23 +65,26 @@ const SearchDomain = () => {
     const baseName = query.trim().replace(/\.[a-z.]+$/i, "");
     const searchResults: SearchResult[] = [];
 
-    for (const tld of tlds) {
+    for (const tld of searchTlds) {
       const domain = `${baseName}${tld}`;
       try {
         const { data, error } = await supabase.functions.invoke("namesilo-api", {
           body: { action: "checkAvailability", domain },
         });
+        const prices = getTldPrice(domain);
         if (!error && data?.data) {
           searchResults.push({
             domain,
             available: data.data.available || false,
-            price: data.data.price || null,
+            price: prices.register ?? (data.data.price || null),
+            renewPrice: prices.renew,
           });
         } else {
-          searchResults.push({ domain, available: false, price: null });
+          searchResults.push({ domain, available: false, price: prices.register, renewPrice: prices.renew });
         }
       } catch {
-        searchResults.push({ domain, available: false, price: null });
+        const prices = getTldPrice(domain);
+        searchResults.push({ domain, available: false, price: prices.register, renewPrice: prices.renew });
       }
     }
 
@@ -62,7 +96,6 @@ const SearchDomain = () => {
     if (!user) return;
     setRegistering(domain);
     try {
-      // Create order
       const price = results.find((r) => r.domain === domain)?.price || 0;
       const { data: order, error } = await supabase.from("orders").insert({
         user_id: user.id,
@@ -75,7 +108,6 @@ const SearchDomain = () => {
 
       if (error) throw error;
 
-      // Create invoice
       const invNum = `INV-${Date.now().toString(36).toUpperCase()}`;
       await supabase.from("invoices").insert({
         user_id: user.id,
@@ -126,7 +158,7 @@ const SearchDomain = () => {
       {searching && (
         <div className="text-center py-12">
           <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-accent" />
-          <p className="text-muted-foreground">Checking availability across {tlds.length} extensions...</p>
+          <p className="text-muted-foreground">Checking availability across {searchTlds.length} extensions...</p>
         </div>
       )}
 
@@ -151,7 +183,14 @@ const SearchDomain = () => {
                 </Badge>
               </div>
               <div className="flex items-center gap-3">
-                {r.price && <span className="text-sm font-semibold">${r.price}/yr</span>}
+                {r.price != null && (
+                  <div className="text-right">
+                    <span className="text-sm font-semibold">${r.price.toFixed(2)}/yr</span>
+                    {r.renewPrice != null && r.renewPrice !== r.price && (
+                      <span className="text-xs text-muted-foreground block">Renew: ${r.renewPrice.toFixed(2)}/yr</span>
+                    )}
+                  </div>
+                )}
                 {r.available && (
                   <Button
                     variant="accent"
