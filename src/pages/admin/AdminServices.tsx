@@ -2,21 +2,47 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Search, MoreVertical, Play, Pause, Trash2, ShieldCheck } from "lucide-react";
 import { format } from "date-fns";
+import { toast } from "sonner";
 
 const AdminServices = () => {
   const [services, setServices] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    supabase.from("hosting_accounts").select("*").order("created_at", { ascending: false }).then(({ data }) => {
-      setServices(data || []);
-      setLoading(false);
-    });
-  }, []);
+  const load = async () => {
+    const { data } = await supabase.from("hosting_accounts").select("*").order("created_at", { ascending: false });
+    setServices(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const updateStatus = async (id: string, status: string) => {
+    const { error } = await supabase.from("hosting_accounts").update({ status }).eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`Service ${status}`);
+    load();
+  };
+
+  const toggleSSL = async (id: string, current: boolean) => {
+    const { error } = await supabase.from("hosting_accounts").update({ ssl_enabled: !current }).eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`SSL ${!current ? "enabled" : "disabled"}`);
+    load();
+  };
+
+  const deleteService = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this service?")) return;
+    const { error } = await supabase.from("hosting_accounts").delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Service deleted");
+    load();
+  };
 
   const filtered = services.filter(s => !search || s.domain.toLowerCase().includes(search.toLowerCase()));
 
@@ -30,7 +56,7 @@ const AdminServices = () => {
     <div className="space-y-6">
       <div>
         <h1 className="font-display font-semibold text-lg">Services</h1>
-        <p className="text-sm text-muted-foreground">All hosting accounts across users</p>
+        <p className="text-sm text-muted-foreground">{services.length} hosting accounts</p>
       </div>
 
       <div className="relative max-w-sm">
@@ -48,13 +74,14 @@ const AdminServices = () => {
               <TableHead>Storage</TableHead>
               <TableHead>SSL</TableHead>
               <TableHead>Created</TableHead>
+              <TableHead className="w-12">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
             ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No services found</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No services found</TableCell></TableRow>
             ) : filtered.map(s => (
               <TableRow key={s.id}>
                 <TableCell className="font-medium">{s.domain}</TableCell>
@@ -63,6 +90,31 @@ const AdminServices = () => {
                 <TableCell>{s.storage_used_mb} MB</TableCell>
                 <TableCell>{s.ssl_enabled ? "✅" : "❌"}</TableCell>
                 <TableCell className="text-muted-foreground">{format(new Date(s.created_at), "MMM d, yyyy")}</TableCell>
+                <TableCell>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="w-4 h-4" /></Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {s.status !== "active" && (
+                        <DropdownMenuItem onClick={() => updateStatus(s.id, "active")}>
+                          <Play className="w-4 h-4 mr-2" /> Activate
+                        </DropdownMenuItem>
+                      )}
+                      {s.status !== "suspended" && (
+                        <DropdownMenuItem onClick={() => updateStatus(s.id, "suspended")}>
+                          <Pause className="w-4 h-4 mr-2" /> Suspend
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem onClick={() => toggleSSL(s.id, s.ssl_enabled)}>
+                        <ShieldCheck className="w-4 h-4 mr-2" /> {s.ssl_enabled ? "Disable SSL" : "Enable SSL"}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => deleteService(s.id)} className="text-destructive">
+                        <Trash2 className="w-4 h-4 mr-2" /> Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
