@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Package, Check, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -32,6 +34,7 @@ const BuyHosting = () => {
   const [loading, setLoading] = useState(true);
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const [ordering, setOrdering] = useState<string | null>(null);
+  const [domainInput, setDomainInput] = useState("");
 
   useEffect(() => {
     supabase
@@ -54,8 +57,14 @@ const BuyHosting = () => {
 
   const handleOrder = async (plan: Plan) => {
     if (!user) return;
+    const domain = domainInput.trim();
+    if (!domain) {
+      toast.error("Please enter a domain name for your hosting");
+      return;
+    }
     setOrdering(plan.id);
     try {
+      // Create order
       const { data: order, error } = await supabase.from("orders").insert({
         user_id: user.id,
         type: "hosting",
@@ -63,6 +72,7 @@ const BuyHosting = () => {
         status: "pending",
         package_id: plan.id,
         billing_cycle: billingCycle,
+        domain_name: domain,
       }).select().single();
 
       if (error) throw error;
@@ -76,11 +86,37 @@ const BuyHosting = () => {
         amount: getPrice(plan),
         status: "unpaid",
         due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        description: `${plan.name} Hosting - ${billingCycle}`,
+        description: `${plan.name} Hosting - ${billingCycle} - ${domain}`,
       });
 
-      toast.success("Order created! Redirecting to billing...");
-      navigate("/dashboard/billing");
+      // Create hosting account in pending_dns status
+      await supabase.from("hosting_accounts").insert({
+        user_id: user.id,
+        domain: domain,
+        plan_id: plan.id,
+        status: "pending_dns",
+        hosting_type: plan.wordpress_enabled ? "wordpress" : "file_upload",
+      });
+
+      // Create domain record if not exists
+      const { data: existingDomain } = await supabase
+        .from("domains")
+        .select("id")
+        .eq("domain_name", domain)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (!existingDomain) {
+        await supabase.from("domains").insert({
+          user_id: user.id,
+          domain_name: domain,
+          domain_type: "primary",
+          status: "pending",
+        });
+      }
+
+      toast.success("Order created! Point your domain nameservers to activate hosting.");
+      navigate("/dashboard/websites");
     } catch (err: any) {
       toast.error(err.message || "Failed to create order");
     }
@@ -96,6 +132,21 @@ const BuyHosting = () => {
       <div>
         <h1 className="font-display font-semibold text-lg">Buy Hosting</h1>
         <p className="text-sm text-muted-foreground">Choose a hosting plan that fits your needs</p>
+      </div>
+
+      {/* Domain input */}
+      <div className="bg-card rounded-xl border border-border p-5">
+        <Label className="text-sm font-medium">Your Domain Name</Label>
+        <p className="text-xs text-muted-foreground mb-2">Enter the domain you want to host. You'll need to point its nameservers to our servers to activate.</p>
+        <Input
+          placeholder="example.co.ke"
+          value={domainInput}
+          onChange={(e) => setDomainInput(e.target.value)}
+          className="max-w-md"
+        />
+        <div className="mt-2 text-xs text-muted-foreground">
+          After ordering, point your domain's nameservers to: <span className="font-mono font-semibold text-foreground">ns1.vintechdev.store</span> & <span className="font-mono font-semibold text-foreground">ns2.vintechdev.store</span>
+        </div>
       </div>
 
       {/* Billing toggle */}
@@ -165,7 +216,7 @@ const BuyHosting = () => {
                 variant="accent"
                 className="w-full"
                 onClick={() => handleOrder(plan)}
-                disabled={ordering === plan.id}
+                disabled={ordering === plan.id || !domainInput.trim()}
               >
                 {ordering === plan.id ? "Processing..." : "Order Now"}
                 <ArrowRight className="w-4 h-4 ml-1" />
