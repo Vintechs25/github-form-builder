@@ -64,10 +64,16 @@ serve(async (req) => {
 
     let VPS_API_URL =
       Deno.env.get("VPS_API_URL") || "https://panel.vin-tech.top/api";
-    // For bare IP/host without protocol, default to http (avoids self-signed cert errors)
+    // For bare IP/host without protocol, default to http
     if (!/^https?:\/\//i.test(VPS_API_URL)) {
       VPS_API_URL = `http://${VPS_API_URL}`;
     }
+    // Force http for IP addresses (self-signed certs)
+    if (/^https:\/\/\d+\.\d+\.\d+\.\d+/i.test(VPS_API_URL)) {
+      VPS_API_URL = VPS_API_URL.replace(/^https:/i, "http:");
+    }
+    // Remove trailing slash to avoid double slashes
+    VPS_API_URL = VPS_API_URL.replace(/\/+$/, "");
 
     // Parse request
     const { action, ...params } = await req.json();
