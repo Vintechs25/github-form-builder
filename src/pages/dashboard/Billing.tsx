@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { CreditCard, Download } from "lucide-react";
+import { CreditCard, Download, Loader2 } from "lucide-react";
 import { useOutletContext } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 interface ContextType { user: User | null; }
 
@@ -13,14 +14,60 @@ const Billing = () => {
   const { user } = useOutletContext<ContextType>();
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [paying, setPaying] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchInvoices = async () => {
     if (!user) return;
-    supabase.from("invoices").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).then(({ data }) => {
-      setInvoices(data || []);
-      setLoading(false);
-    });
-  }, [user]);
+    const { data } = await supabase
+      .from("invoices")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+    setInvoices(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchInvoices(); }, [user]);
+
+  const handlePay = async (invoice: any) => {
+    // Simulate payment (placeholder for M-Pesa/Paystack integration)
+    setPaying(invoice.id);
+    try {
+      // Mark invoice as paid
+      const { error: invErr } = await supabase
+        .from("invoices")
+        .update({ status: "paid", paid_at: new Date().toISOString(), payment_gateway: "manual" })
+        .eq("id", invoice.id);
+      if (invErr) throw invErr;
+
+      // Mark related order as paid
+      if (invoice.order_id) {
+        await supabase
+          .from("orders")
+          .update({ status: "paid" })
+          .eq("id", invoice.order_id);
+
+        // Trigger order processing (provisions hosting/domain)
+        const { data, error } = await supabase.functions.invoke("process-order", {
+          body: { order_id: invoice.order_id },
+        });
+
+        if (error) {
+          console.error("Process order error:", error);
+          toast.warning("Payment recorded but provisioning encountered an issue. Our team will follow up.");
+        } else {
+          toast.success("Payment successful! Your service is being provisioned.");
+        }
+      } else {
+        toast.success("Payment recorded successfully.");
+      }
+
+      fetchInvoices();
+    } catch (err: any) {
+      toast.error(err.message || "Payment failed");
+    }
+    setPaying(null);
+  };
 
   const statusColor = (s: string) => {
     switch (s) {
@@ -64,7 +111,14 @@ const Billing = () => {
         <div className="bg-card rounded-xl border border-border overflow-hidden">
           <Table>
             <TableHeader>
-              <TableRow><TableHead>Invoice</TableHead><TableHead>Description</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead><TableHead>Due Date</TableHead><TableHead>Action</TableHead></TableRow>
+              <TableRow>
+                <TableHead>Invoice</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Due Date</TableHead>
+                <TableHead>Action</TableHead>
+              </TableRow>
             </TableHeader>
             <TableBody>
               {invoices.map((inv) => (
@@ -76,7 +130,14 @@ const Billing = () => {
                   <TableCell className="text-sm">{new Date(inv.due_date).toLocaleDateString()}</TableCell>
                   <TableCell>
                     {inv.status === "unpaid" || inv.status === "overdue" ? (
-                      <Button variant="accent" size="sm">Pay Now</Button>
+                      <Button
+                        variant="accent"
+                        size="sm"
+                        onClick={() => handlePay(inv)}
+                        disabled={paying === inv.id}
+                      >
+                        {paying === inv.id ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Processing...</> : "Pay Now"}
+                      </Button>
                     ) : (
                       <Button variant="ghost" size="sm"><Download className="w-4 h-4" /></Button>
                     )}

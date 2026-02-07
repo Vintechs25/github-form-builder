@@ -44,3 +44,11 @@ export async function deleteHosting(domain: string) {
 export async function verifyConnection() {
   return callVpsApi("verify");
 }
+
+export async function checkDns(domain: string, hostingAccountId?: string) {
+  const { data, error } = await supabase.functions.invoke("check-dns", {
+    body: { domain, hosting_account_id: hostingAccountId },
+  });
+  if (error) throw new Error(error.message || "DNS check failed");
+  return data;
+}
