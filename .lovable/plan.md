@@ -1,120 +1,38 @@
 
 
-# VINTECH Hosting Platform - Full Build Plan
+## Suspension Warnings + Email Notifications
 
-## Overview
-
-This plan upgrades the existing client panel into a complete hosting automation platform with orders/transactions, RBAC, VPS API integration, NameSilo domain reseller, and enhanced UI across all pages.
-
----
-
-## Phase 1: Database Schema Updates
-
-### New Tables
-
-- **`orders`** - Track hosting and domain purchases with `user_id`, `type` (hosting/domain), `total_amount`, `status` (pending/paid/cancelled), `package_id`, `domain_name`, `billing_cycle`
-- **`transactions`** - Payment records linked to invoices with `invoice_id`, `method`, `reference`, `amount`
-- **`dns_records`** - Domain DNS management with `domain_id`, `type` (A/AAAA/CNAME/MX/TXT/NS), `host`, `value`, `ttl`
-- **`user_roles`** - RBAC table with `user_id` + `role` enum (`admin`, `moderator`, `user`)
-
-### Schema Modifications
-
-- Add `registrar` column to `domains` table (for NameSilo integration)
-- Add `order_id` column to `invoices` table (link invoices to orders)
-- Update `hosting_plans` to include `billing_cycle` options
-
-### Security
-
-- RLS on all new tables
-- `has_role()` security definer function for admin checks
-- Admin-only policies on `user_roles` table
+### What This Does
+1. **Dashboard warnings**: Show a prominent red alert banner on the Overview and Websites pages when a hosting account is suspended, with a direct "Pay Now" link to the overdue invoice.
+2. **Email notifications**: Send an email to the user when their hosting is suspended (triggered from the auto-suspend function) and when it's unsuspended (triggered from the Paystack payment flow).
 
 ---
 
-## Phase 2: Backend Functions (Edge Functions)
+### Prerequisites
 
-### 1. `vps-api` - VPS Hosting Automation
-Proxies requests to `https://panel.vin-tech.top/api/`:
-- `POST /create-account` - Provision hosting
-- `POST /suspend` - Suspend account
-- `POST /delete` - Delete account
-- `POST /create-db` - Create database
-- `POST /create-email` - Create email account
-- `POST /ssl` - Issue SSL certificate
-
-### 2. `namesilo-api` - Domain Reseller
-Wraps NameSilo API calls:
-- `checkAvailability(domain)` - Search domain availability
-- `registerDomain(domain, years)` - Register domain
-- `renewDomain(domain)` - Renew domain
-- `getDNSRecords(domain)` - List DNS records
-- `addDNSRecord(record)` - Add DNS record
-- `deleteDNSRecord(id)` - Delete DNS record
-- `changeNameservers(domain, ns[])` - Update nameservers
-
-### 3. `process-order` - Order Processing
-Handles post-payment automation:
-- Creates hosting account via VPS API if hosting order
-- Registers domain via NameSilo if domain order
-- Updates order/invoice status
-- Sends credential emails (future)
+You'll need to set up a **Resend** account for sending emails:
+1. Sign up at [resend.com](https://resend.com)
+2. Verify your email domain at [resend.com/domains](https://resend.com/domains)
+3. Create an API key at [resend.com/api-keys](https://resend.com/api-keys)
+4. You'll be prompted to provide the `RESEND_API_KEY` during implementation
 
 ---
 
-## Phase 3: Enhanced Client Pages
+### Technical Details
 
-### New Pages
+**Frontend Changes:**
 
-1. **Buy Hosting** (`/dashboard/buy-hosting`) - Package selection, billing cycle, checkout flow
-2. **Search Domains** (`/dashboard/search-domain`) - Domain search with NameSilo availability check, add to cart, register
-3. **DNS Manager** (`/dashboard/domains/:id/dns`) - Full DNS record management (A, AAAA, CNAME, MX, TXT, NS records)
-4. **Orders** (`/dashboard/orders`) - Order history with status tracking
-5. **Cart / Checkout** (`/dashboard/checkout`) - Combined checkout for hosting + domain orders
+1. **`src/pages/dashboard/Overview.tsx`** -- Add a suspension alert banner (red/destructive styling) that appears when any hosting account has `status === "suspended"`. It will show the domain name and a "Pay Now" button linking to `/dashboard/billing`.
 
-### Enhanced Existing Pages
+2. **`src/pages/dashboard/Websites.tsx`** -- Add a suspended state to the website cards: red icon, "Suspended" badge, and an inline warning with a "Pay Overdue Invoice" button linking to billing.
 
-- **Websites** - Add "Manage" actions that call VPS API (suspend, SSL, create DB/email)
-- **Domains** - Add NameSilo integration (register, renew, transfer, nameserver management)
-- **Billing** - Link to orders, show transactions, "Pay Now" flow
-- **Overview** - Add revenue/order stats, recent activity feed
-- **Settings** - Add password change, notification preferences
+**Backend Changes:**
 
----
+3. **New edge function: `supabase/functions/send-notification-email/index.ts`** -- A generic notification email sender using Resend. Accepts `to`, `subject`, `html` fields. Used by both auto-suspend and paystack functions.
 
-## Phase 4: Authentication & RBAC
+4. **Update `supabase/functions/auto-suspend/index.ts`** -- After suspending each account, fetch the user's email from `profiles` table and call the `send-notification-email` function to notify them their hosting was suspended with a link to pay.
 
-- Add `user_roles` table (separate from profiles, as required)
-- Create `has_role()` function for secure role checking
-- Add role-aware hook (`useUserRole`) for client-side role checks
-- Protect admin-only routes
-- Note: Admin dashboard pages are deferred to the next phase per user preference (client panel first)
+5. **Update `supabase/functions/paystack/index.ts`** -- After unsuspending an account, send a confirmation email letting the user know their hosting is back online.
 
----
-
-## Technical Details
-
-### Required Secrets
-- **VPS_API_KEY** - Authentication token for `panel.vin-tech.top/api/`
-- **VPS_API_URL** - Base URL (defaults to `https://panel.vin-tech.top/api/`)
-- **NAMESILO_API_KEY** - NameSilo reseller API key
-
-### File Changes Summary
-
-| Category | Files |
-|----------|-------|
-| Migration | 1 new migration (orders, transactions, dns_records, user_roles, schema updates) |
-| Edge Functions | 3 new: `vps-api`, `namesilo-api`, `process-order` |
-| New Pages | 5 new dashboard pages |
-| Updated Pages | 5 enhanced existing pages |
-| Hooks | 1 new: `useUserRole` |
-| Services | 2 new: `domainService.ts`, `hostingService.ts` |
-| Routes | Updated `App.tsx` with new routes |
-
-### Order of Implementation
-1. Database migration (tables + RLS + functions)
-2. Edge functions (VPS API proxy, NameSilo wrapper, order processor)
-3. Service layer (TypeScript clients for edge functions)
-4. New pages (buy hosting, search domain, DNS manager, orders, checkout)
-5. Enhance existing pages (websites, domains, billing, overview, settings)
-6. RBAC hook and role-based UI guards
+6. **Update `supabase/config.toml`** -- Register the new `send-notification-email` function.
 
