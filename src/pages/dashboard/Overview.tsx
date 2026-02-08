@@ -115,8 +115,8 @@ const Overview = () => {
                 Point your domain nameservers to <span className="font-mono font-semibold text-foreground">ns1.vintechdev.store</span> &{" "}
                 <span className="font-mono font-semibold text-foreground">ns2.vintechdev.store</span> to activate hosting.
               </p>
-              <Link to="/dashboard/websites">
-                <Button variant="outline" size="sm" className="mt-3">View Websites <ChevronRight className="w-3 h-3 ml-1" /></Button>
+              <Link to="/dashboard/hosting">
+                <Button variant="outline" size="sm" className="mt-3">View Hosting <ChevronRight className="w-3 h-3 ml-1" /></Button>
               </Link>
             </div>
           </div>
@@ -125,8 +125,8 @@ const Overview = () => {
 
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-display font-semibold text-lg">Your Websites</h2>
-          <Link to="/dashboard/websites">
+          <h2 className="font-display font-semibold text-lg">Your Hosting</h2>
+          <Link to="/dashboard/hosting">
             <Button variant="ghost" size="sm">View All <ChevronRight className="w-4 h-4 ml-1" /></Button>
           </Link>
         </div>
@@ -187,7 +187,7 @@ const Overview = () => {
                   </div>
                 )}
                 {account.status === "pending_dns" && (
-                  <p className="text-xs text-muted-foreground">Point nameservers to activate → <Link to="/dashboard/websites" className="text-accent underline">View details</Link></p>
+                  <p className="text-xs text-muted-foreground">Point nameservers to activate → <Link to="/dashboard/hosting" className="text-accent underline">View details</Link></p>
                 )}
                 {account.status === "suspended" && (
                   <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-3">

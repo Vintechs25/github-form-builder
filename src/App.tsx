@@ -11,6 +11,7 @@ import NotFound from "./pages/NotFound";
 import DashboardLayout from "./components/dashboard/DashboardLayout";
 import Overview from "./pages/dashboard/Overview";
 import Websites from "./pages/dashboard/Websites";
+import MyHosting from "./pages/dashboard/MyHosting";
 import Domains from "./pages/dashboard/Domains";
 import Databases from "./pages/dashboard/Databases";
 import FileManager from "./pages/dashboard/FileManager";
@@ -62,6 +63,7 @@ const App = () => (
             >
               <Route index element={<Overview />} />
               <Route path="websites" element={<Websites />} />
+              <Route path="hosting" element={<MyHosting />} />
               <Route path="domains" element={<Domains />} />
               <Route path="databases" element={<Databases />} />
               <Route path="files" element={<FileManager />} />
