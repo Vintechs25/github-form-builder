@@ -162,9 +162,10 @@ const Checkout = () => {
       }).catch(() => {});
 
       // 6. Initialize Paystack payment
+      const callbackUrl = `${window.location.origin}/dashboard/payment-callback`;
       const { data: paystackData, error: paystackErr } = await supabase.functions.invoke(
         "paystack/initialize",
-        { body: { invoiceId: invoice.id } }
+        { body: { invoice_id: invoice.id, callback_url: callbackUrl } }
       );
       if (paystackErr) throw paystackErr;
 
