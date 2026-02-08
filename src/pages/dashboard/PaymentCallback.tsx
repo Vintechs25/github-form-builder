@@ -58,8 +58,8 @@ const PaymentCallback = () => {
             <CheckCircle2 className="w-12 h-12 text-success mx-auto" />
             <h2 className="font-display font-semibold text-lg">Payment Successful!</h2>
             <p className="text-muted-foreground text-sm">{message}</p>
-            <Button onClick={() => navigate("/dashboard/billing")} className="mt-4">
-              View Invoices
+            <Button onClick={() => navigate("/dashboard/websites")} className="mt-4">
+              View My Hosting
             </Button>
           </>
         )}
