@@ -103,15 +103,8 @@ async function unsuspendIfNeeded(serviceClient: any, invoice: any) {
           },
           body: JSON.stringify({
             to: profile.email,
-            subject: `Hosting Restored: ${account.domain}`,
-            html: `
-              <h2>Your hosting for ${account.domain} is back online</h2>
-              <p>Hi${profile.first_name ? ` ${profile.first_name}` : ""},</p>
-              <p>Great news! Your payment has been received and your hosting for <strong>${account.domain}</strong> has been restored.</p>
-              <p>Your website should be accessible again shortly.</p>
-              <p>Thank you for your payment!</p>
-              <p>— VintechHost</p>
-            `,
+            type: "unsuspension",
+            data: { domain: account.domain, firstName: profile.first_name },
           }),
         });
         console.log(`[paystack] Unsuspension email sent to ${profile.email} for ${account.domain}`);
@@ -147,6 +140,41 @@ async function markInvoicePaidAndUnsuspend(
     method: "paystack",
     reference,
   });
+
+  // Send payment received email
+  try {
+    const { data: profile } = await serviceClient
+      .from("profiles")
+      .select("email, first_name")
+      .eq("user_id", invoice.user_id)
+      .maybeSingle();
+
+    if (profile?.email) {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      await fetch(`${supabaseUrl}/functions/v1/send-notification-email`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify({
+          to: profile.email,
+          type: "payment_received",
+          data: {
+            firstName: profile.first_name,
+            invoiceNumber: invoice.invoice_number,
+            amount: invoice.amount,
+            currency: invoice.currency,
+            reference,
+          },
+        }),
+      });
+      console.log(`[paystack] Payment received email sent to ${profile.email}`);
+    }
+  } catch (emailErr) {
+    console.error("[paystack] Failed to send payment email:", emailErr);
+  }
 
   // Unsuspend hosting if it was suspended
   await unsuspendIfNeeded(serviceClient, invoice);

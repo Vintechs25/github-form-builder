@@ -109,15 +109,33 @@ const SearchDomain = () => {
       if (error) throw error;
 
       const invNum = `INV-${Date.now().toString(36).toUpperCase()}`;
+      const dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      const invoiceDesc = `Domain Registration: ${domain}`;
       await supabase.from("invoices").insert({
         user_id: user.id,
         order_id: order.id,
         invoice_number: invNum,
         amount: price,
         status: "unpaid",
-        due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        description: `Domain Registration: ${domain}`,
+        due_date: dueDate,
+        description: invoiceDesc,
       });
+
+      // Send invoice created email notification
+      supabase.functions.invoke("send-notification-email", {
+        body: {
+          to: user.email,
+          type: "invoice_created",
+          data: {
+            firstName: null,
+            invoiceNumber: invNum,
+            amount: price,
+            currency: "KES",
+            dueDate: new Date(dueDate).toLocaleDateString(),
+            description: invoiceDesc,
+          },
+        },
+      }).catch(() => {});
 
       toast.success("Domain order created! Proceed to billing to pay.");
       navigate("/dashboard/billing");
