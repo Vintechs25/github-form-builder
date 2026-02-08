@@ -4,13 +4,12 @@ import { Package, Check, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useOutletContext, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import type { User } from "@supabase/supabase-js";
 import { Badge } from "@/components/ui/badge";
 
-interface ContextType { user: User | null; }
+
 
 interface Plan {
   id: string;
@@ -28,12 +27,10 @@ interface Plan {
 }
 
 const BuyHosting = () => {
-  const { user } = useOutletContext<ContextType>();
   const navigate = useNavigate();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
-  const [ordering, setOrdering] = useState<string | null>(null);
   const [domainInput, setDomainInput] = useState("");
 
   useEffect(() => {
@@ -55,91 +52,19 @@ const BuyHosting = () => {
       ? plan.price_yearly
       : plan.price_monthly;
 
-  const handleOrder = async (plan: Plan) => {
-    if (!user) return;
+  const handleOrder = (plan: Plan) => {
     const domain = domainInput.trim();
     if (!domain) {
       toast.error("Please enter a domain name for your hosting");
       return;
     }
-    setOrdering(plan.id);
-    try {
-      // Create order
-      const { data: order, error } = await supabase.from("orders").insert({
-        user_id: user.id,
-        type: "hosting",
-        total_amount: getPrice(plan),
-        status: "pending",
-        package_id: plan.id,
-        billing_cycle: billingCycle,
-        domain_name: domain,
-      }).select().single();
-
-      if (error) throw error;
-
-      // Create invoice
-      const invNum = `INV-${Date.now().toString(36).toUpperCase()}`;
-      const invoiceAmount = getPrice(plan);
-      const dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-      const invoiceDesc = `${plan.name} Hosting - ${billingCycle} - ${domain}`;
-      await supabase.from("invoices").insert({
-        user_id: user.id,
-        order_id: order.id,
-        invoice_number: invNum,
-        amount: invoiceAmount,
-        status: "unpaid",
-        due_date: dueDate,
-        description: invoiceDesc,
-      });
-
-      // Send invoice created email notification
-      supabase.functions.invoke("send-notification-email", {
-        body: {
-          to: user.email,
-          type: "invoice_created",
-          data: {
-            firstName: null,
-            invoiceNumber: invNum,
-            amount: invoiceAmount,
-            currency: "KES",
-            dueDate: new Date(dueDate).toLocaleDateString(),
-            description: invoiceDesc,
-          },
-        },
-      }).catch(() => {});
-
-      // Create hosting account in pending_dns status
-      await supabase.from("hosting_accounts").insert({
-        user_id: user.id,
-        domain: domain,
-        plan_id: plan.id,
-        status: "pending_dns",
-        hosting_type: plan.wordpress_enabled ? "wordpress" : "file_upload",
-      });
-
-      // Create domain record if not exists
-      const { data: existingDomain } = await supabase
-        .from("domains")
-        .select("id")
-        .eq("domain_name", domain)
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (!existingDomain) {
-        await supabase.from("domains").insert({
-          user_id: user.id,
-          domain_name: domain,
-          domain_type: "primary",
-          status: "pending",
-        });
-      }
-
-      toast.success("Order created! Point your domain nameservers to activate hosting.");
-      navigate("/dashboard/websites");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to create order");
-    }
-    setOrdering(null);
+    navigate("/dashboard/checkout", {
+      state: {
+        planId: plan.id,
+        domain,
+        billingCycle,
+      },
+    });
   };
 
   if (loading) {
@@ -235,9 +160,9 @@ const BuyHosting = () => {
                 variant="accent"
                 className="w-full"
                 onClick={() => handleOrder(plan)}
-                disabled={ordering === plan.id || !domainInput.trim()}
+                disabled={!domainInput.trim()}
               >
-                {ordering === plan.id ? "Processing..." : "Order Now"}
+                Order Now
                 <ArrowRight className="w-4 h-4 ml-1" />
               </Button>
             </motion.div>

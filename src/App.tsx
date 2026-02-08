@@ -24,6 +24,7 @@ import SearchDomain from "./pages/dashboard/SearchDomain";
 import DnsManager from "./pages/dashboard/DnsManager";
 import Orders from "./pages/dashboard/Orders";
 import PaymentCallback from "./pages/dashboard/PaymentCallback";
+import Checkout from "./pages/dashboard/Checkout";
 import AdminRoute from "./components/admin/AdminRoute";
 import AdminLayout from "./components/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -74,6 +75,7 @@ const App = () => (
               <Route path="domains/:id/dns" element={<DnsManager />} />
               <Route path="orders" element={<Orders />} />
               <Route path="payment-callback" element={<PaymentCallback />} />
+              <Route path="checkout" element={<Checkout />} />
             </Route>
             <Route
               path="/admin"
