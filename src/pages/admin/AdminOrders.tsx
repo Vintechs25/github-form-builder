@@ -37,10 +37,13 @@ const AdminOrders = () => {
   };
 
   const deleteOrder = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this order? This cannot be undone.")) return;
+    if (!confirm("Are you sure you want to delete this order and its linked invoices? This cannot be undone.")) return;
+    // Delete linked invoices first to avoid FK constraint
+    const { error: invErr } = await supabase.from("invoices").delete().eq("order_id", id);
+    if (invErr) { toast.error(invErr.message); return; }
     const { error } = await supabase.from("orders").delete().eq("id", id);
     if (error) { toast.error(error.message); return; }
-    toast.success("Order deleted");
+    toast.success("Order and linked invoices deleted");
     load();
   };
 
