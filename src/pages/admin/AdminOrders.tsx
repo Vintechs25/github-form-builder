@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Search, MoreVertical, CheckCircle, XCircle, Clock, Ban } from "lucide-react";
+import { Search, MoreVertical, CheckCircle, XCircle, Clock, Ban, Trash2 } from "lucide-react";
+import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -32,6 +33,14 @@ const AdminOrders = () => {
     const { error } = await supabase.from("orders").update({ status }).eq("id", id);
     if (error) { toast.error(error.message); return; }
     toast.success(`Order marked as ${status}`);
+    load();
+  };
+
+  const deleteOrder = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this order? This cannot be undone.")) return;
+    const { error } = await supabase.from("orders").delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Order deleted");
     load();
   };
 
@@ -119,6 +128,10 @@ const AdminOrders = () => {
                           <Ban className="w-4 h-4 mr-2" /> Cancel Order
                         </DropdownMenuItem>
                       )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => deleteOrder(o.id)} className="text-destructive">
+                        <Trash2 className="w-4 h-4 mr-2" /> Delete
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
