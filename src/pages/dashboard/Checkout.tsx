@@ -119,14 +119,18 @@ const Checkout = () => {
         .single();
       if (invErr) throw invErr;
 
-      // 3. Create hosting account (pending_dns)
-      await supabase.from("hosting_accounts").insert({
+      // 3. Create hosting account (pending_dns — will activate after DNS verification)
+      const { error: hostErr } = await supabase.from("hosting_accounts").insert({
         user_id: user.id,
         domain: state.domain,
         plan_id: plan.id,
         status: "pending_dns",
         hosting_type: plan.wordpress_enabled ? "wordpress" : "file_upload",
       });
+      if (hostErr) {
+        console.error("Hosting account creation error:", hostErr);
+        // Don't throw — proceed with payment, process-order will create it after payment
+      }
 
       // 4. Create domain record if not exists
       const { data: existingDomain } = await supabase
