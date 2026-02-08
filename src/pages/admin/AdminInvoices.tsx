@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { Search, MoreVertical, CheckCircle, DollarSign, AlertTriangle, Ban } from "lucide-react";
+import { Search, MoreVertical, CheckCircle, DollarSign, AlertTriangle, Ban, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -48,6 +48,14 @@ const AdminInvoices = () => {
     const { error } = await supabase.from("invoices").update({ status: "cancelled" }).eq("id", id);
     if (error) { toast.error(error.message); return; }
     toast.success("Invoice cancelled");
+    load();
+  };
+
+  const deleteInvoice = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this invoice? This cannot be undone.")) return;
+    const { error } = await supabase.from("invoices").delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Invoice deleted");
     load();
   };
 
@@ -159,6 +167,10 @@ const AdminInvoices = () => {
                           </DropdownMenuItem>
                         </>
                       )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => deleteInvoice(i.id)} className="text-destructive">
+                        <Trash2 className="w-4 h-4 mr-2" /> Delete
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
