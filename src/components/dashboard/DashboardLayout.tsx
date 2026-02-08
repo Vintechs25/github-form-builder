@@ -14,6 +14,7 @@ import { toast } from "sonner";
 const navItems = [
   { icon: Home, label: "Overview", path: "/dashboard" },
   { icon: Globe, label: "Websites", path: "/dashboard/websites" },
+  { icon: Server, label: "My Hosting", path: "/dashboard/hosting" },
   { icon: Package, label: "Buy Hosting", path: "/dashboard/buy-hosting" },
   { icon: LayoutGrid, label: "Domains", path: "/dashboard/domains" },
   { icon: Search, label: "Search Domains", path: "/dashboard/search-domain" },
