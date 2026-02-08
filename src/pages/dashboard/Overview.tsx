@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Globe, Database, Upload, Mail, ChevronRight, Plus, Clock, CheckCircle2 } from "lucide-react";
+import { Globe, Database, Upload, Mail, ChevronRight, Plus, Clock, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useOutletContext, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -58,6 +58,30 @@ const Overview = () => {
           </Button>
         </Link>
       </div>
+
+      {/* Suspension alert */}
+      {hostingAccounts.filter((a) => a.status === "suspended").length > 0 && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-destructive/5 border border-destructive/20 rounded-xl p-5">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-destructive mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <p className="font-medium text-destructive">
+                {hostingAccounts.filter((a) => a.status === "suspended").length} hosting account{hostingAccounts.filter((a) => a.status === "suspended").length > 1 ? "s" : ""} suspended
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Your hosting for{" "}
+                <span className="font-semibold text-foreground">
+                  {hostingAccounts.filter((a) => a.status === "suspended").map((a) => a.domain).join(", ")}
+                </span>{" "}
+                has been suspended due to an overdue invoice. Pay now to restore service.
+              </p>
+              <Link to="/dashboard/billing">
+                <Button variant="destructive" size="sm" className="mt-3">Pay Now <ChevronRight className="w-3 h-3 ml-1" /></Button>
+              </Link>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-gradient-to-r from-accent/10 to-gold/10 rounded-2xl p-6 border border-accent/20">
         <h2 className="font-display font-bold text-xl mb-2">
@@ -122,9 +146,12 @@ const Overview = () => {
                   <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                       account.status === "active" ? "bg-success/10" :
+                      account.status === "suspended" ? "bg-destructive/10" :
                       account.status === "pending_dns" ? "bg-warning/10" : "bg-accent/10"
                     }`}>
-                      {account.status === "pending_dns" ? (
+                      {account.status === "suspended" ? (
+                        <AlertTriangle className="w-5 h-5 text-destructive" />
+                      ) : account.status === "pending_dns" ? (
                         <Clock className="w-5 h-5 text-warning" />
                       ) : account.status === "active" ? (
                         <CheckCircle2 className="w-5 h-5 text-success" />
@@ -139,6 +166,7 @@ const Overview = () => {
                   </div>
                   <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${
                     account.status === "active" ? "bg-success/10 text-success" :
+                    account.status === "suspended" ? "bg-destructive/10 text-destructive" :
                     account.status === "pending_dns" ? "bg-warning/10 text-warning" :
                     "bg-muted text-muted-foreground"
                   }`}>
@@ -160,6 +188,12 @@ const Overview = () => {
                 )}
                 {account.status === "pending_dns" && (
                   <p className="text-xs text-muted-foreground">Point nameservers to activate → <Link to="/dashboard/websites" className="text-accent underline">View details</Link></p>
+                )}
+                {account.status === "suspended" && (
+                  <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-3">
+                    <p className="text-xs text-destructive font-medium">⚠ Suspended — overdue invoice</p>
+                    <Link to="/dashboard/billing"><Button variant="destructive" size="sm" className="mt-2 h-7 text-xs">Pay Now</Button></Link>
+                  </div>
                 )}
               </motion.div>
             ))}

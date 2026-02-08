@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
-import { Globe, Plus, ExternalLink, RefreshCw, CheckCircle2, Clock, Copy, Loader2 } from "lucide-react";
+import { Globe, Plus, ExternalLink, RefreshCw, CheckCircle2, Clock, Copy, Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useOutletContext, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -161,9 +161,12 @@ const Websites = () => {
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                     account.status === "active" ? "bg-success/10" :
+                    account.status === "suspended" ? "bg-destructive/10" :
                     account.status === "pending_dns" ? "bg-warning/10" : "bg-accent/10"
                   }`}>
-                    {account.status === "pending_dns" ? (
+                    {account.status === "suspended" ? (
+                      <AlertTriangle className="w-5 h-5 text-destructive" />
+                    ) : account.status === "pending_dns" ? (
                       <Clock className="w-5 h-5 text-warning" />
                     ) : account.status === "active" ? (
                       <CheckCircle2 className="w-5 h-5 text-success" />
@@ -212,6 +215,19 @@ const Websites = () => {
                       <><RefreshCw className="w-3 h-3 mr-1" /> Check Now</>
                     )}
                   </Button>
+                </div>
+              )}
+
+              {/* Suspended card */}
+              {account.status === "suspended" && (
+                <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-4 mb-4">
+                  <p className="text-sm font-medium text-destructive mb-2">⚠ Hosting Suspended</p>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    This hosting account has been suspended due to an overdue invoice. Pay now to restore service.
+                  </p>
+                  <Link to="/dashboard/billing">
+                    <Button variant="destructive" size="sm">Pay Overdue Invoice</Button>
+                  </Link>
                 </div>
               )}
 
