@@ -83,6 +83,42 @@ async function unsuspendIfNeeded(serviceClient: any, invoice: any) {
       .eq("id", account.id);
 
     console.log(`[paystack] Hosting ${account.domain} unsuspended successfully`);
+
+    // Send unsuspension email
+    try {
+      const { data: profile } = await serviceClient
+        .from("profiles")
+        .select("email, first_name")
+        .eq("user_id", invoice.user_id)
+        .maybeSingle();
+
+      if (profile?.email) {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        await fetch(`${supabaseUrl}/functions/v1/send-notification-email`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${serviceKey}`,
+          },
+          body: JSON.stringify({
+            to: profile.email,
+            subject: `Hosting Restored: ${account.domain}`,
+            html: `
+              <h2>Your hosting for ${account.domain} is back online</h2>
+              <p>Hi${profile.first_name ? ` ${profile.first_name}` : ""},</p>
+              <p>Great news! Your payment has been received and your hosting for <strong>${account.domain}</strong> has been restored.</p>
+              <p>Your website should be accessible again shortly.</p>
+              <p>Thank you for your payment!</p>
+              <p>— VintechHost</p>
+            `,
+          }),
+        });
+        console.log(`[paystack] Unsuspension email sent to ${profile.email} for ${account.domain}`);
+      }
+    } catch (emailErr) {
+      console.error(`[paystack] Failed to send unsuspension email:`, emailErr);
+    }
   } catch (err) {
     console.error(`[paystack] Failed to unsuspend ${account.domain}:`, err);
   }

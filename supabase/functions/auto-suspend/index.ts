@@ -148,6 +148,42 @@ serve(async (req) => {
           .eq("id", invoiceId)
           .eq("status", "unpaid");
 
+        // Send suspension email
+        try {
+          const { data: profile } = await serviceClient
+            .from("profiles")
+            .select("email, first_name")
+            .eq("user_id", userId)
+            .maybeSingle();
+
+          if (profile?.email) {
+            const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+            const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+            await fetch(`${supabaseUrl}/functions/v1/send-notification-email`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${serviceKey}`,
+              },
+              body: JSON.stringify({
+                to: profile.email,
+                subject: `Hosting Suspended: ${domain}`,
+                html: `
+                  <h2>Your hosting for ${domain} has been suspended</h2>
+                  <p>Hi${profile.first_name ? ` ${profile.first_name}` : ""},</p>
+                  <p>Your hosting account for <strong>${domain}</strong> has been suspended due to an unpaid invoice that is more than 7 days overdue.</p>
+                  <p>To restore your hosting, please log in to your dashboard and pay the outstanding invoice.</p>
+                  <p>If you believe this is an error, please contact our support team.</p>
+                  <p>— VintechHost</p>
+                `,
+              }),
+            });
+            console.log(`[auto-suspend] Suspension email sent to ${profile.email} for ${domain}`);
+          }
+        } catch (emailErr) {
+          console.error(`[auto-suspend] Failed to send suspension email for ${domain}:`, emailErr);
+        }
+
         results.push({ account_id: accountId, domain, success: true });
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : "Unknown error";
