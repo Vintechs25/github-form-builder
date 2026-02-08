@@ -68,23 +68,23 @@ serve(async (req) => {
       nsRecords.includes(ns.toLowerCase())
     );
 
-    const result = {
+    const result: Record<string, unknown> = {
       domain,
       pointed,
       current_nameservers: nsRecords,
       required_nameservers: REQUIRED_NS,
     };
 
-    // If pointed and hosting_account_id provided, activate the hosting
-    if (pointed && hosting_account_id) {
-      console.log(`[check-dns] NS verified for ${domain}, activating hosting ${hosting_account_id}`);
+    // If hosting_account_id provided and account is still pending_dns, retry provisioning
+    // This serves as a fallback for cases where initial provisioning in process-order failed
+    if (hosting_account_id) {
+      console.log(`[check-dns] Checking hosting account ${hosting_account_id} for retry provisioning`);
 
       const serviceClient = createClient(
         Deno.env.get("SUPABASE_URL")!,
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
       );
 
-      // Check hosting account belongs to user and is pending_dns
       const { data: account } = await serviceClient
         .from("hosting_accounts")
         .select("*")
@@ -93,8 +93,8 @@ serve(async (req) => {
         .single();
 
       if (account && account.status === "pending_dns") {
-        // Provision via CyberPanel
-        const VPS_API_KEY = Deno.env.get("VPS_API_KEY");
+        console.log(`[check-dns] Account ${hosting_account_id} is pending_dns, retrying CyberPanel provisioning`);
+
         const CYBERPANEL_USER = Deno.env.get("CYBERPANEL_USER");
         const CYBERPANEL_PASS = Deno.env.get("CYBERPANEL_PASS");
         let VPS_API_URL = Deno.env.get("VPS_API_URL") || "https://panel.vintechcyber.com:8090/api";
@@ -114,7 +114,7 @@ serve(async (req) => {
               if (plan) packageName = plan.name || plan.slug;
             }
 
-            console.log(`[check-dns] Provisioning website ${domain} with package ${packageName}`);
+            console.log(`[check-dns] Retrying: creating website ${domain} with package ${packageName}`);
 
             const vpsRes = await fetch(`${VPS_API_URL}/createWebsite`, {
               method: "POST",
@@ -131,12 +131,14 @@ serve(async (req) => {
             });
 
             const vpsText = await vpsRes.text();
-            let vpsData;
+            let vpsData: Record<string, unknown>;
             try { vpsData = JSON.parse(vpsText); } catch { vpsData = { raw: vpsText }; }
             console.log(`[check-dns] CyberPanel createWebsite response:`, vpsData);
 
-            if (vpsRes.ok) {
-              // Issue SSL
+            const isSuccess = vpsRes.ok || vpsData.createWebSiteStatus === 1 || vpsData.success === true;
+
+            if (isSuccess) {
+              // Issue SSL (non-fatal)
               try {
                 await fetch(`${VPS_API_URL}/issueSSL`, {
                   method: "POST",
@@ -157,11 +159,11 @@ serve(async (req) => {
                 .update({
                   status: "active",
                   ssl_enabled: true,
-                  cpanel_username: vpsData.username || null,
+                  cpanel_username: (vpsData.username as string) || null,
                 })
                 .eq("id", hosting_account_id);
 
-              // Update related domain nameservers
+              // Update related domain
               await serviceClient
                 .from("domains")
                 .update({
@@ -172,21 +174,23 @@ serve(async (req) => {
                 .eq("domain_name", domain)
                 .eq("user_id", userId);
 
-              (result as any).provisioned = true;
-              (result as any).hosting_status = "active";
+              result.provisioned = true;
+              result.hosting_status = "active";
             } else {
               console.error(`[check-dns] CyberPanel provisioning failed:`, vpsData);
-              (result as any).provisioned = false;
-              (result as any).provision_error = vpsData;
+              result.provisioned = false;
+              result.provision_error = vpsData;
             }
           } catch (err) {
             console.error(`[check-dns] Provisioning error:`, err);
-            (result as any).provisioned = false;
-            (result as any).provision_error = err instanceof Error ? err.message : "Unknown error";
+            result.provisioned = false;
+            result.provision_error = err instanceof Error ? err.message : "Unknown error";
           }
         } else {
           console.error("[check-dns] CyberPanel credentials not configured");
         }
+      } else if (account) {
+        result.hosting_status = account.status;
       }
     }
 
