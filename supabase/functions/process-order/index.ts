@@ -13,31 +13,10 @@ serve(async (req) => {
   }
 
   try {
-    // Auth check
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const supabase = createClient(
+    const serviceClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
-
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } =
-      await supabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const userId = claimsData.claims.sub;
 
     const { order_id } = await req.json();
     if (!order_id) {
@@ -47,10 +26,39 @@ serve(async (req) => {
       });
     }
 
-    const serviceClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    // Try user auth first, fall back to service-role (for server-to-server calls from paystack)
+    let userId: string | null = null;
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } }
+      );
+      const token = authHeader.replace("Bearer ", "");
+      const { data: { user } } = await supabase.auth.getUser(token);
+      if (user) userId = user.id;
+    }
+
+    // If no user auth, fetch userId from the order itself (server-to-server call)
+    if (!userId) {
+      const { data: orderCheck } = await serviceClient
+        .from("orders")
+        .select("user_id")
+        .eq("id", order_id)
+        .single();
+      if (orderCheck) {
+        userId = orderCheck.user_id;
+        console.log(`[process-order] Server-to-server call, resolved userId from order: ${userId}`);
+      }
+    }
+
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Could not resolve user" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Fetch order
     const { data: order, error: orderError } = await serviceClient
