@@ -30,43 +30,26 @@ const Billing = () => {
   useEffect(() => { fetchInvoices(); }, [user]);
 
   const handlePay = async (invoice: any) => {
-    // Simulate payment (placeholder for M-Pesa/Paystack integration)
     setPaying(invoice.id);
     try {
-      // Mark invoice as paid
-      const { error: invErr } = await supabase
-        .from("invoices")
-        .update({ status: "paid", paid_at: new Date().toISOString(), payment_gateway: "manual" })
-        .eq("id", invoice.id);
-      if (invErr) throw invErr;
+      const callbackUrl = `${window.location.origin}/dashboard/payment-callback`;
 
-      // Mark related order as paid
-      if (invoice.order_id) {
-        await supabase
-          .from("orders")
-          .update({ status: "paid" })
-          .eq("id", invoice.order_id);
+      const { data, error } = await supabase.functions.invoke("paystack/initialize", {
+        body: { invoice_id: invoice.id, callback_url: callbackUrl },
+      });
 
-        // Trigger order processing (provisions hosting/domain)
-        const { data, error } = await supabase.functions.invoke("process-order", {
-          body: { order_id: invoice.order_id },
-        });
+      if (error) throw new Error(error.message);
 
-        if (error) {
-          console.error("Process order error:", error);
-          toast.warning("Payment recorded but provisioning encountered an issue. Our team will follow up.");
-        } else {
-          toast.success("Payment successful! Your service is being provisioned.");
-        }
+      if (data?.authorization_url) {
+        // Redirect to Paystack checkout
+        window.location.href = data.authorization_url;
       } else {
-        toast.success("Payment recorded successfully.");
+        throw new Error("Failed to get payment URL");
       }
-
-      fetchInvoices();
     } catch (err: any) {
-      toast.error(err.message || "Payment failed");
+      toast.error(err.message || "Payment initialization failed");
+      setPaying(null);
     }
-    setPaying(null);
   };
 
   const statusColor = (s: string) => {
@@ -136,7 +119,7 @@ const Billing = () => {
                         onClick={() => handlePay(inv)}
                         disabled={paying === inv.id}
                       >
-                        {paying === inv.id ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Processing...</> : "Pay Now"}
+                        {paying === inv.id ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Redirecting...</> : "Pay with Paystack"}
                       </Button>
                     ) : (
                       <Button variant="ghost" size="sm"><Download className="w-4 h-4" /></Button>
