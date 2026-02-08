@@ -1,13 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   Upload, FolderOpen, File, Folder, Trash2, Plus, Download,
   Edit3, Loader2, RefreshCw, ArrowLeft, FileText, Image, Code,
-  ChevronRight, Search,
+  ChevronRight, Search, Save, X, FilePlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle,
@@ -18,9 +19,17 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useOutletContext } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import {
+  listFiles, createFile, createFolder, deleteFiles, renameFile,
+  readFile, writeFile,
+} from "@/services/hostingService";
 import type { User } from "@supabase/supabase-js";
 
 interface ContextType { user: User | null; }
@@ -28,28 +37,42 @@ interface ContextType { user: User | null; }
 interface FileItem {
   name: string;
   type: "file" | "folder";
-  size?: string;
-  modified?: string;
-  permissions?: string;
+  size: string;
+  modified: string;
+  permissions: string;
 }
 
 const FileManager = () => {
   const { user } = useOutletContext<ContextType>();
   const [accounts, setAccounts] = useState<any[]>([]);
   const [selectedDomain, setSelectedDomain] = useState("");
-  const [currentPath, setCurrentPath] = useState("/home");
+  const [currentPath, setCurrentPath] = useState("");
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingFiles, setLoadingFiles] = useState(false);
-  const [createFolderOpen, setCreateFolderOpen] = useState(false);
-  const [newFolderName, setNewFolderName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Dialogs
+  const [createFolderOpen, setCreateFolderOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [createFileOpen, setCreateFileOpen] = useState(false);
+  const [newFileName, setNewFileName] = useState("");
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState("");
+  const [newName, setNewName] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorPath, setEditorPath] = useState("");
+  const [editorContent, setEditorContent] = useState("");
+  const [editorLoading, setEditorLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Load hosting accounts
   useEffect(() => {
     if (!user) return;
     supabase
       .from("hosting_accounts")
-      .select("id, domain, status, cpanel_username")
+      .select("id, domain, status")
       .eq("user_id", user.id)
       .eq("status", "active")
       .then(({ data }) => {
@@ -62,28 +85,77 @@ const FileManager = () => {
       });
   }, [user]);
 
+  // Change domain → reset path
   useEffect(() => {
     if (selectedDomain) {
-      const account = accounts.find((a) => a.domain === selectedDomain);
-      if (account) {
-        setCurrentPath(`/home/${selectedDomain}/public_html`);
-      }
+      setCurrentPath(`/home/${selectedDomain}/public_html`);
     }
   }, [selectedDomain]);
+
+  // Fetch files when path changes
+  const fetchFiles = useCallback(async () => {
+    if (!selectedDomain || !currentPath) return;
+    setLoadingFiles(true);
+    try {
+      const result = await listFiles(selectedDomain, currentPath);
+      const data = result?.data || result;
+
+      if (data?.status === 0) {
+        toast.error(data.error_message || "Cannot access this directory");
+        setFiles([]);
+        setLoadingFiles(false);
+        return;
+      }
+
+      // Parse CyberPanel's numbered response format
+      // Each entry: [name, displayName, lastModified, sizeKB, permissions, isDirFlag]
+      const parsed: FileItem[] = [];
+      for (const key of Object.keys(data)) {
+        if (key === "status" || key === "error_message") continue;
+        const entry = data[key];
+        if (!Array.isArray(entry)) continue;
+        parsed.push({
+          name: entry[0],
+          type: entry[5] === 1 ? "folder" : "file",
+          size: entry[3] ? `${entry[3]} KB` : "—",
+          modified: entry[2] || "—",
+          permissions: entry[4] || "",
+        });
+      }
+
+      // Sort: folders first, then files
+      parsed.sort((a, b) => {
+        if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+
+      setFiles(parsed);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to load files");
+      setFiles([]);
+    } finally {
+      setLoadingFiles(false);
+    }
+  }, [selectedDomain, currentPath]);
+
+  useEffect(() => {
+    fetchFiles();
+  }, [fetchFiles]);
 
   // File type icon helper
   const getFileIcon = (name: string, type: string) => {
     if (type === "folder") return <Folder className="w-4 h-4 text-accent" />;
     const ext = name.split(".").pop()?.toLowerCase();
     if (["jpg", "jpeg", "png", "gif", "svg", "webp"].includes(ext || ""))
-      return <Image className="w-4 h-4 text-success" />;
-    if (["html", "css", "js", "ts", "php", "py", "json"].includes(ext || ""))
-      return <Code className="w-4 h-4 text-warning" />;
-    if (["txt", "md", "log"].includes(ext || ""))
+      return <Image className="w-4 h-4 text-accent" />;
+    if (["html", "css", "js", "ts", "php", "py", "json", "xml"].includes(ext || ""))
+      return <Code className="w-4 h-4 text-primary" />;
+    if (["txt", "md", "log", "conf", "htaccess"].includes(ext || ""))
       return <FileText className="w-4 h-4 text-muted-foreground" />;
     return <File className="w-4 h-4 text-muted-foreground" />;
   };
 
+  const rootPath = `/home/${selectedDomain}/public_html`;
   const breadcrumbs = currentPath.split("/").filter(Boolean);
 
   const navigateToPath = (index: number) => {
@@ -91,20 +163,96 @@ const FileManager = () => {
     setCurrentPath(newPath);
   };
 
-  // Placeholder files for demo - will be replaced by actual API call
-  const demoFiles: FileItem[] = [
-    { name: "public_html", type: "folder" },
-    { name: "logs", type: "folder" },
-    { name: ".htaccess", type: "file", size: "1.2 KB" },
-    { name: "index.html", type: "file", size: "4.5 KB" },
-    { name: "style.css", type: "file", size: "12.3 KB" },
-    { name: "script.js", type: "file", size: "8.7 KB" },
-    { name: "favicon.ico", type: "file", size: "1.1 KB" },
-  ];
+  const isEditable = (name: string) => {
+    const ext = name.split(".").pop()?.toLowerCase() || "";
+    return ["html", "htm", "css", "js", "ts", "php", "py", "json", "xml", "txt", "md",
+      "log", "conf", "htaccess", "env", "yml", "yaml", "toml", "ini", "sh", "sql"].includes(ext);
+  };
+
+  // ─── Actions ──────────────────────────────────────────────────────────
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) return;
+    try {
+      await createFolder(selectedDomain, `${currentPath}/${newFolderName}`);
+      toast.success(`Folder "${newFolderName}" created`);
+      setCreateFolderOpen(false);
+      setNewFolderName("");
+      fetchFiles();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to create folder");
+    }
+  };
+
+  const handleCreateFile = async () => {
+    if (!newFileName.trim()) return;
+    try {
+      await createFile(selectedDomain, `${currentPath}/${newFileName}`);
+      toast.success(`File "${newFileName}" created`);
+      setCreateFileOpen(false);
+      setNewFileName("");
+      fetchFiles();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to create file");
+    }
+  };
+
+  const handleDelete = async (name: string) => {
+    try {
+      await deleteFiles(selectedDomain, currentPath, [name]);
+      toast.success(`"${name}" deleted`);
+      setDeleteTarget(null);
+      fetchFiles();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete");
+    }
+  };
+
+  const handleRename = async () => {
+    if (!newName.trim()) return;
+    try {
+      await renameFile(selectedDomain, currentPath, renameTarget, newName);
+      toast.success(`Renamed to "${newName}"`);
+      setRenameOpen(false);
+      setRenameTarget("");
+      setNewName("");
+      fetchFiles();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to rename");
+    }
+  };
+
+  const handleOpenEditor = async (fileName: string) => {
+    const filePath = `${currentPath}/${fileName}`;
+    setEditorPath(filePath);
+    setEditorOpen(true);
+    setEditorLoading(true);
+    try {
+      const result = await readFile(selectedDomain, filePath);
+      const data = result?.data || result;
+      setEditorContent(data?.fileContents || "");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to read file");
+      setEditorOpen(false);
+    } finally {
+      setEditorLoading(false);
+    }
+  };
+
+  const handleSaveFile = async () => {
+    setSaving(true);
+    try {
+      await writeFile(selectedDomain, editorPath, editorContent);
+      toast.success("File saved");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save file");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const displayFiles = searchQuery
-    ? demoFiles.filter((f) => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    : demoFiles;
+    ? files.filter((f) => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : files;
 
   if (loading) {
     return (
@@ -122,11 +270,11 @@ const FileManager = () => {
           <p className="text-sm text-muted-foreground">Upload and manage your website files</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setCreateFileOpen(true)}>
+            <FilePlus className="w-4 h-4 mr-1" /> New File
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setCreateFolderOpen(true)}>
             <Plus className="w-4 h-4 mr-1" /> New Folder
-          </Button>
-          <Button variant="accent" size="sm">
-            <Upload className="w-4 h-4 mr-1" /> Upload
           </Button>
         </div>
       </div>
@@ -162,7 +310,7 @@ const FileManager = () => {
                 className="pl-9"
               />
             </div>
-            <Button variant="outline" size="sm" disabled={loadingFiles}>
+            <Button variant="outline" size="sm" onClick={fetchFiles} disabled={loadingFiles}>
               <RefreshCw className={`w-4 h-4 mr-1 ${loadingFiles ? "animate-spin" : ""}`} /> Refresh
             </Button>
           </div>
@@ -170,106 +318,133 @@ const FileManager = () => {
           {/* Breadcrumbs */}
           <div className="flex items-center gap-1 text-sm overflow-x-auto pb-1">
             <button
-              onClick={() => setCurrentPath(`/home/${selectedDomain}/public_html`)}
+              onClick={() => setCurrentPath(rootPath)}
               className="text-accent hover:underline font-medium shrink-0"
             >
-              root
+              public_html
             </button>
-            {breadcrumbs.map((part, i) => (
-              <span key={i} className="flex items-center gap-1 shrink-0">
-                <ChevronRight className="w-3 h-3 text-muted-foreground" />
-                <button
-                  onClick={() => navigateToPath(i)}
-                  className={`hover:underline ${i === breadcrumbs.length - 1 ? "text-foreground font-medium" : "text-accent"}`}
-                >
-                  {part}
-                </button>
-              </span>
-            ))}
+            {currentPath !== rootPath && breadcrumbs.slice(rootPath.split("/").filter(Boolean).length).map((part, i) => {
+              const absIndex = rootPath.split("/").filter(Boolean).length + i;
+              return (
+                <span key={absIndex} className="flex items-center gap-1 shrink-0">
+                  <ChevronRight className="w-3 h-3 text-muted-foreground" />
+                  <button
+                    onClick={() => navigateToPath(absIndex)}
+                    className={`hover:underline ${absIndex === breadcrumbs.length - 1 ? "text-foreground font-medium" : "text-accent"}`}
+                  >
+                    {part}
+                  </button>
+                </span>
+              );
+            })}
           </div>
 
           {/* File listing */}
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
             <div className="bg-card rounded-xl border border-border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[50%]">Name</TableHead>
-                    <TableHead>Size</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {/* Parent directory */}
-                  {currentPath !== `/home/${selectedDomain}/public_html` && (
-                    <TableRow
-                      className="cursor-pointer hover:bg-secondary/50"
-                      onClick={() => {
-                        const parts = currentPath.split("/");
-                        parts.pop();
-                        setCurrentPath(parts.join("/") || "/");
-                      }}
-                    >
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <ArrowLeft className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-muted-foreground">..</span>
-                        </div>
-                      </TableCell>
-                      <TableCell />
-                      <TableCell />
-                      <TableCell />
+              {loadingFiles ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-sm text-muted-foreground">Loading files...</span>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[40%]">Name</TableHead>
+                      <TableHead>Size</TableHead>
+                      <TableHead>Modified</TableHead>
+                      <TableHead>Permissions</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  )}
-                  {displayFiles.map((file) => (
-                    <TableRow
-                      key={file.name}
-                      className={file.type === "folder" ? "cursor-pointer hover:bg-secondary/50" : ""}
-                      onClick={() => {
-                        if (file.type === "folder") setCurrentPath(`${currentPath}/${file.name}`);
-                      }}
-                    >
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {getFileIcon(file.name, file.type)}
-                          <span className={`font-medium ${file.type === "folder" ? "text-accent" : ""}`}>
-                            {file.name}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {file.size || "—"}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground capitalize">
-                        {file.type}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {file.type === "file" && (
-                            <>
-                              <Button variant="ghost" size="sm" title="Edit">
+                  </TableHeader>
+                  <TableBody>
+                    {/* Parent directory */}
+                    {currentPath !== rootPath && (
+                      <TableRow
+                        className="cursor-pointer hover:bg-secondary/50"
+                        onClick={() => {
+                          const parts = currentPath.split("/");
+                          parts.pop();
+                          const parent = parts.join("/") || "/";
+                          if (parent.startsWith(`/home/${selectedDomain}`)) {
+                            setCurrentPath(parent);
+                          }
+                        }}
+                      >
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <ArrowLeft className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-muted-foreground">..</span>
+                          </div>
+                        </TableCell>
+                        <TableCell />
+                        <TableCell />
+                        <TableCell />
+                        <TableCell />
+                      </TableRow>
+                    )}
+                    {displayFiles.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                          {searchQuery ? "No files match your search" : "This directory is empty"}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {displayFiles.map((file) => (
+                      <TableRow
+                        key={file.name}
+                        className={file.type === "folder" ? "cursor-pointer hover:bg-secondary/50" : ""}
+                        onClick={() => {
+                          if (file.type === "folder") setCurrentPath(`${currentPath}/${file.name}`);
+                        }}
+                      >
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {getFileIcon(file.name, file.type)}
+                            <span className={`font-medium ${file.type === "folder" ? "text-accent" : ""}`}>
+                              {file.name}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{file.size}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{file.modified}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground font-mono text-xs">{file.permissions}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                            {file.type === "file" && isEditable(file.name) && (
+                              <Button variant="ghost" size="sm" title="Edit" onClick={() => handleOpenEditor(file.name)}>
                                 <Edit3 className="w-4 h-4" />
                               </Button>
-                              <Button variant="ghost" size="sm" title="Download">
-                                <Download className="w-4 h-4" />
-                              </Button>
-                            </>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Rename"
+                              onClick={() => {
+                                setRenameTarget(file.name);
+                                setNewName(file.name);
+                                setRenameOpen(true);
+                              }}
+                            >
+                              <FileText className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive"
+                              title="Delete"
+                              onClick={() => setDeleteTarget(file.name)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </div>
           </motion.div>
 
@@ -277,7 +452,7 @@ const FileManager = () => {
           <div className="bg-accent/5 border border-accent/20 rounded-xl p-4 text-sm text-muted-foreground">
             <p>
               <strong className="text-foreground">Note:</strong> File operations are processed on your server.
-              Large uploads may take a moment. Your web root is at{" "}
+              Your web root is at{" "}
               <code className="bg-secondary px-1.5 py-0.5 rounded text-foreground text-xs">
                 /home/{selectedDomain}/public_html
               </code>
@@ -304,12 +479,106 @@ const FileManager = () => {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateFolderOpen(false)}>Cancel</Button>
-            <Button variant="accent" onClick={() => {
-              toast.success(`Folder "${newFolderName}" created`);
-              setCreateFolderOpen(false);
-              setNewFolderName("");
-            }}>
-              Create Folder
+            <Button onClick={handleCreateFolder}>Create Folder</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create File Dialog */}
+      <Dialog open={createFileOpen} onOpenChange={setCreateFileOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New File</DialogTitle>
+            <DialogDescription>Create a new file in {currentPath}</DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label>File Name</Label>
+            <Input
+              placeholder="index.html"
+              value={newFileName}
+              onChange={(e) => setNewFileName(e.target.value)}
+              className="mt-2"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateFileOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreateFile}>Create File</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename Dialog */}
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename</DialogTitle>
+            <DialogDescription>Rename "{renameTarget}"</DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label>New Name</Label>
+            <Input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              className="mt-2"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameOpen(false)}>Cancel</Button>
+            <Button onClick={handleRename}>Rename</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete "{deleteTarget}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. The file or folder will be permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteTarget && handleDelete(deleteTarget)}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Code Editor Dialog */}
+      <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Code className="w-4 h-4" />
+              {editorPath.split("/").pop()}
+            </DialogTitle>
+            <DialogDescription className="font-mono text-xs">{editorPath}</DialogDescription>
+          </DialogHeader>
+          {editorLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-6 h-6 animate-spin" />
+            </div>
+          ) : (
+            <Textarea
+              value={editorContent}
+              onChange={(e) => setEditorContent(e.target.value)}
+              className="flex-1 min-h-[400px] font-mono text-sm resize-none"
+              spellCheck={false}
+            />
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditorOpen(false)}>
+              <X className="w-4 h-4 mr-1" /> Close
+            </Button>
+            <Button onClick={handleSaveFile} disabled={saving || editorLoading}>
+              {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+              Save
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -30,7 +30,15 @@ type VpsAction =
   | "create-backup"
   | "list-backups"
   | "restore-backup"
-  | "delete-backup";
+  | "delete-backup"
+  // File Manager
+  | "list-files"
+  | "create-file"
+  | "create-folder"
+  | "delete-file"
+  | "rename-file"
+  | "read-file"
+  | "write-file";
 
 // ─── Core API call ──────────────────────────────────────────────────────────
 export async function callVpsApi(action: VpsAction, params: Record<string, unknown> = {}) {
@@ -153,4 +161,33 @@ export async function checkDns(domain: string, hostingAccountId?: string) {
   });
   if (error) throw new Error(error.message || "DNS check failed");
   return data;
+}
+
+// ─── File Manager ───────────────────────────────────────────────────────────
+export async function listFiles(domain: string, path?: string) {
+  return callVpsApi("list-files", { domain, path });
+}
+
+export async function createFile(domain: string, path: string) {
+  return callVpsApi("create-file", { domain, path });
+}
+
+export async function createFolder(domain: string, path: string) {
+  return callVpsApi("create-folder", { domain, path });
+}
+
+export async function deleteFiles(domain: string, basePath: string, items: string[], skipTrash = true) {
+  return callVpsApi("delete-file", { domain, basePath, items, skipTrash });
+}
+
+export async function renameFile(domain: string, basePath: string, existingName: string, newFileName: string) {
+  return callVpsApi("rename-file", { domain, basePath, existingName, newFileName });
+}
+
+export async function readFile(domain: string, path: string) {
+  return callVpsApi("read-file", { domain, path });
+}
+
+export async function writeFile(domain: string, path: string, content: string) {
+  return callVpsApi("write-file", { domain, path, content });
 }

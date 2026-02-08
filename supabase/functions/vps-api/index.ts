@@ -42,6 +42,14 @@ const SESSION_API: Record<string, string> = {
   "list-backups": "/backup/getCurrentBackups",
   "restore-backup": "/backup/submitRestore",
   "delete-backup": "/backup/deleteBackup",
+  // File Manager operations (all go through /filemanager/controller)
+  "list-files": "/filemanager/controller",
+  "create-file": "/filemanager/controller",
+  "create-folder": "/filemanager/controller",
+  "delete-file": "/filemanager/controller",
+  "rename-file": "/filemanager/controller",
+  "read-file": "/filemanager/controller",
+  "write-file": "/filemanager/controller",
 };
 
 const ALL_ACTIONS = [...Object.keys(OFFICIAL_API), ...Object.keys(SESSION_API)];
@@ -394,6 +402,47 @@ serve(async (req) => {
           break;
         case "delete-backup":
           bodyParams.backupFile = params.backupFile;
+          break;
+        // ─── File Manager operations ──────────────────────────────────
+        case "list-files":
+          bodyParams.method = "listForTable";
+          bodyParams.domainName = params.domain;
+          bodyParams.completeStartingPath = params.path || `/home/${params.domain}/public_html`;
+          break;
+        case "create-file":
+          bodyParams.method = "createNewFile";
+          bodyParams.domainName = params.domain;
+          bodyParams.fileName = params.path;
+          break;
+        case "create-folder":
+          bodyParams.method = "createNewFolder";
+          bodyParams.domainName = params.domain;
+          bodyParams.folderName = params.path;
+          break;
+        case "delete-file":
+          bodyParams.method = "deleteFolderOrFile";
+          bodyParams.domainName = params.domain;
+          bodyParams.path = params.basePath;
+          bodyParams.fileAndFolders = params.items;
+          bodyParams.skipTrash = params.skipTrash ?? true;
+          break;
+        case "rename-file":
+          bodyParams.method = "rename";
+          bodyParams.domainName = params.domain;
+          bodyParams.basePath = params.basePath;
+          bodyParams.existingName = params.existingName;
+          bodyParams.newFileName = params.newFileName;
+          break;
+        case "read-file":
+          bodyParams.method = "readFileContents";
+          bodyParams.domainName = params.domain;
+          bodyParams.fileName = params.path;
+          break;
+        case "write-file":
+          bodyParams.method = "writeFileContents";
+          bodyParams.domainName = params.domain;
+          bodyParams.fileName = params.path;
+          bodyParams.fileContent = params.content;
           break;
         default:
           Object.assign(bodyParams, params);
