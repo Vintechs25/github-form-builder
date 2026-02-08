@@ -1,50 +1,152 @@
 import { supabase } from "@/integrations/supabase/client";
 
+// ─── Types ──────────────────────────────────────────────────────────────────
 type VpsAction =
-  | "create-account"
-  | "suspend"
-  | "unsuspend"
-  | "delete"
-  | "verify";
+  // Official API
+  | "verify"
+  | "create-website"
+  | "delete-website"
+  | "website-status"
+  | "issue-ssl"
+  | "list-packages"
+  | "change-package"
+  | "get-user-info"
+  // Database
+  | "list-databases"
+  | "create-database"
+  | "delete-database"
+  // Email
+  | "list-emails"
+  | "create-email"
+  | "delete-email"
+  | "change-email-password"
+  // DNS
+  | "create-dns-zone"
+  | "add-dns-record"
+  | "delete-dns-record"
+  | "list-dns-records"
+  | "delete-dns-zone"
+  // Backup
+  | "create-backup"
+  | "list-backups"
+  | "restore-backup"
+  | "delete-backup";
 
+// ─── Core API call ──────────────────────────────────────────────────────────
 export async function callVpsApi(action: VpsAction, params: Record<string, unknown> = {}) {
   const { data, error } = await supabase.functions.invoke("vps-api", {
     body: { action, ...params },
   });
-  if (error) throw new Error(error.message || "VPS API call failed");
+  if (error) throw new Error(error.message || "API call failed");
   return data;
 }
 
+// ─── Website / Hosting ──────────────────────────────────────────────────────
 export async function createHostingAccount(
   domain: string,
   packageName: string,
   ownerEmail?: string,
   websiteOwner?: string
 ) {
-  return callVpsApi("create-account", {
-    domain,
-    package: packageName,
-    ownerEmail,
-    websiteOwner,
-  });
-}
-
-export async function suspendHosting(domain: string) {
-  return callVpsApi("suspend", { domain });
-}
-
-export async function unsuspendHosting(domain: string) {
-  return callVpsApi("unsuspend", { domain });
+  return callVpsApi("create-website", { domain, package: packageName, ownerEmail, websiteOwner });
 }
 
 export async function deleteHosting(domain: string) {
-  return callVpsApi("delete", { domain });
+  return callVpsApi("delete-website", { domain });
+}
+
+export async function suspendHosting(domain: string) {
+  return callVpsApi("website-status", { domain, state: "Suspend" });
+}
+
+export async function unsuspendHosting(domain: string) {
+  return callVpsApi("website-status", { domain, state: "Activate" });
 }
 
 export async function verifyConnection() {
   return callVpsApi("verify");
 }
 
+export async function issueSSL(domain: string) {
+  return callVpsApi("issue-ssl", { domain });
+}
+
+// ─── Databases ──────────────────────────────────────────────────────────────
+export async function listDatabases(domain: string) {
+  return callVpsApi("list-databases", { domain });
+}
+
+export async function createDatabase(domain: string, dbName: string, dbUsername: string, dbPassword: string) {
+  return callVpsApi("create-database", { domain, dbName, dbUsername, dbPassword });
+}
+
+export async function deleteDatabase(dbName: string) {
+  return callVpsApi("delete-database", { dbName });
+}
+
+// ─── Email ──────────────────────────────────────────────────────────────────
+export async function listEmails(domain: string) {
+  return callVpsApi("list-emails", { domain });
+}
+
+export async function createEmail(domain: string, email: string, password: string) {
+  return callVpsApi("create-email", { domain, email, password });
+}
+
+export async function deleteEmail(email: string) {
+  return callVpsApi("delete-email", { email });
+}
+
+export async function changeEmailPassword(email: string, password: string) {
+  return callVpsApi("change-email-password", { email, password });
+}
+
+// ─── DNS ────────────────────────────────────────────────────────────────────
+export async function createDnsZone(domain: string) {
+  return callVpsApi("create-dns-zone", { domain });
+}
+
+export async function listDnsRecords(domain: string, recordType: string) {
+  return callVpsApi("list-dns-records", { domain, recordType });
+}
+
+export async function addDnsRecord(
+  domain: string,
+  recordType: string,
+  recordName: string,
+  value: string,
+  ttl?: number,
+  priority?: number
+) {
+  return callVpsApi("add-dns-record", { domain, recordType, recordName, value, ttl, priority });
+}
+
+export async function deleteDnsRecord(recordId: string) {
+  return callVpsApi("delete-dns-record", { recordId });
+}
+
+export async function deleteDnsZone(domain: string) {
+  return callVpsApi("delete-dns-zone", { domain });
+}
+
+// ─── Backups ────────────────────────────────────────────────────────────────
+export async function createBackup(domain: string, destination?: string) {
+  return callVpsApi("create-backup", { domain, destination });
+}
+
+export async function listBackups(domain: string) {
+  return callVpsApi("list-backups", { domain });
+}
+
+export async function restoreBackup(backupFile: string) {
+  return callVpsApi("restore-backup", { backupFile });
+}
+
+export async function deleteBackup(backupFile: string) {
+  return callVpsApi("delete-backup", { backupFile });
+}
+
+// ─── DNS Check (separate edge function) ─────────────────────────────────────
 export async function checkDns(domain: string, hostingAccountId?: string) {
   const { data, error } = await supabase.functions.invoke("check-dns", {
     body: { domain, hosting_account_id: hostingAccountId },

@@ -17,6 +17,7 @@ import Databases from "./pages/dashboard/Databases";
 import FileManager from "./pages/dashboard/FileManager";
 import EmailAccounts from "./pages/dashboard/EmailAccounts";
 import Security from "./pages/dashboard/Security";
+import Backups from "./pages/dashboard/Backups";
 import Billing from "./pages/dashboard/Billing";
 import Support from "./pages/dashboard/Support";
 import SettingsPage from "./pages/dashboard/SettingsPage";
@@ -69,6 +70,7 @@ const App = () => (
               <Route path="files" element={<FileManager />} />
               <Route path="email" element={<EmailAccounts />} />
               <Route path="security" element={<Security />} />
+              <Route path="backups" element={<Backups />} />
               <Route path="billing" element={<Billing />} />
               <Route path="support" element={<Support />} />
               <Route path="settings" element={<SettingsPage />} />
