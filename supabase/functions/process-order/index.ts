@@ -211,6 +211,51 @@ serve(async (req) => {
       .update({ status: "completed" })
       .eq("id", order_id);
 
+    // Send welcome email for hosting orders
+    if (order.type === "hosting") {
+      try {
+        const { data: profile } = await serviceClient
+          .from("profiles")
+          .select("email, first_name")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (profile?.email) {
+          let planName: string | undefined;
+          if (order.package_id) {
+            const { data: plan } = await serviceClient
+              .from("hosting_plans")
+              .select("name")
+              .eq("id", order.package_id)
+              .maybeSingle();
+            planName = plan?.name;
+          }
+
+          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+          const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+          await fetch(`${supabaseUrl}/functions/v1/send-notification-email`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${serviceKey}`,
+            },
+            body: JSON.stringify({
+              to: profile.email,
+              type: "welcome",
+              data: {
+                firstName: profile.first_name,
+                domain: order.domain_name,
+                planName,
+              },
+            }),
+          });
+          console.log(`[process-order] Welcome email sent to ${profile.email}`);
+        }
+      } catch (emailErr) {
+        console.error("[process-order] Failed to send welcome email:", emailErr);
+      }
+    }
+
     console.log(`[process-order] Order ${order_id} completed`, results);
 
     return new Response(

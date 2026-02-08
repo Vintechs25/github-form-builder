@@ -79,15 +79,34 @@ const BuyHosting = () => {
 
       // Create invoice
       const invNum = `INV-${Date.now().toString(36).toUpperCase()}`;
+      const invoiceAmount = getPrice(plan);
+      const dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      const invoiceDesc = `${plan.name} Hosting - ${billingCycle} - ${domain}`;
       await supabase.from("invoices").insert({
         user_id: user.id,
         order_id: order.id,
         invoice_number: invNum,
-        amount: getPrice(plan),
+        amount: invoiceAmount,
         status: "unpaid",
-        due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        description: `${plan.name} Hosting - ${billingCycle} - ${domain}`,
+        due_date: dueDate,
+        description: invoiceDesc,
       });
+
+      // Send invoice created email notification
+      supabase.functions.invoke("send-notification-email", {
+        body: {
+          to: user.email,
+          type: "invoice_created",
+          data: {
+            firstName: null,
+            invoiceNumber: invNum,
+            amount: invoiceAmount,
+            currency: "KES",
+            dueDate: new Date(dueDate).toLocaleDateString(),
+            description: invoiceDesc,
+          },
+        },
+      }).catch(() => {});
 
       // Create hosting account in pending_dns status
       await supabase.from("hosting_accounts").insert({

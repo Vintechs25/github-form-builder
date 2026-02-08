@@ -167,15 +167,12 @@ serve(async (req) => {
               },
               body: JSON.stringify({
                 to: profile.email,
-                subject: `Hosting Suspended: ${domain}`,
-                html: `
-                  <h2>Your hosting for ${domain} has been suspended</h2>
-                  <p>Hi${profile.first_name ? ` ${profile.first_name}` : ""},</p>
-                  <p>Your hosting account for <strong>${domain}</strong> has been suspended due to an unpaid invoice that is more than 7 days overdue.</p>
-                  <p>To restore your hosting, please log in to your dashboard and pay the outstanding invoice.</p>
-                  <p>If you believe this is an error, please contact our support team.</p>
-                  <p>— VintechHost</p>
-                `,
+                type: "suspension",
+                data: {
+                  domain,
+                  firstName: profile.first_name,
+                  dashboardUrl: "https://vintechdev.store/dashboard/billing",
+                },
               }),
             });
             console.log(`[auto-suspend] Suspension email sent to ${profile.email} for ${domain}`);
