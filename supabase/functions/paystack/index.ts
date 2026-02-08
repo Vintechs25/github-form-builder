@@ -9,6 +9,136 @@ const corsHeaders = {
 
 const PAYSTACK_BASE = "https://api.paystack.co";
 
+// ─── UNSUSPEND HELPER ─────────────────────────────────────────────
+async function unsuspendIfNeeded(serviceClient: any, invoice: any) {
+  // Check hosting account directly linked to invoice
+  let accountId = invoice.hosting_account_id;
+
+  // If no direct link, check via order's domain
+  if (!accountId && invoice.order_id) {
+    const { data: order } = await serviceClient
+      .from("orders")
+      .select("domain_name")
+      .eq("id", invoice.order_id)
+      .maybeSingle();
+
+    if (order?.domain_name) {
+      const { data: acct } = await serviceClient
+        .from("hosting_accounts")
+        .select("id, status")
+        .eq("domain", order.domain_name)
+        .eq("user_id", invoice.user_id)
+        .eq("status", "suspended")
+        .maybeSingle();
+      if (acct) accountId = acct.id;
+    }
+  }
+
+  if (!accountId) return;
+
+  // Check if account is suspended
+  const { data: account } = await serviceClient
+    .from("hosting_accounts")
+    .select("id, domain, status")
+    .eq("id", accountId)
+    .eq("status", "suspended")
+    .maybeSingle();
+
+  if (!account) return;
+
+  console.log(`[paystack] Unsuspending hosting for ${account.domain} (account ${account.id})`);
+
+  const CYBERPANEL_USER = Deno.env.get("CYBERPANEL_USER");
+  const CYBERPANEL_PASS = Deno.env.get("CYBERPANEL_PASS");
+  let VPS_API_URL = Deno.env.get("VPS_API_URL") || "https://panel.vintechcyber.com:8090/api";
+  if (!/^https?:\/\//i.test(VPS_API_URL)) VPS_API_URL = `http://${VPS_API_URL}`;
+  VPS_API_URL = VPS_API_URL.replace(/\/+$/, "");
+
+  if (!CYBERPANEL_USER || !CYBERPANEL_PASS) {
+    console.error("[paystack] CyberPanel credentials not configured, cannot unsuspend");
+    return;
+  }
+
+  try {
+    const vpsRes = await fetch(`${VPS_API_URL}/submitWebsiteStatus`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        adminUser: CYBERPANEL_USER,
+        adminPass: CYBERPANEL_PASS,
+        websiteName: account.domain,
+        state: "Unsuspend",
+      }),
+    });
+
+    const vpsText = await vpsRes.text();
+    let vpsData: any;
+    try { vpsData = JSON.parse(vpsText); } catch { vpsData = { raw: vpsText }; }
+    console.log(`[paystack] CyberPanel unsuspend response for ${account.domain}:`, vpsData);
+
+    // Update hosting account status back to active
+    await serviceClient
+      .from("hosting_accounts")
+      .update({ status: "active" })
+      .eq("id", account.id);
+
+    console.log(`[paystack] Hosting ${account.domain} unsuspended successfully`);
+  } catch (err) {
+    console.error(`[paystack] Failed to unsuspend ${account.domain}:`, err);
+  }
+}
+
+// ─── MARK PAID + UNSUSPEND HELPER ─────────────────────────────────
+async function markInvoicePaidAndUnsuspend(
+  serviceClient: any,
+  invoice: any,
+  reference: string
+) {
+  await serviceClient
+    .from("invoices")
+    .update({
+      status: "paid",
+      paid_at: new Date().toISOString(),
+      payment_gateway: "paystack",
+    })
+    .eq("id", invoice.id);
+
+  // Record transaction
+  await serviceClient.from("transactions").insert({
+    user_id: invoice.user_id,
+    invoice_id: invoice.id,
+    amount: invoice.amount,
+    method: "paystack",
+    reference,
+  });
+
+  // Unsuspend hosting if it was suspended
+  await unsuspendIfNeeded(serviceClient, invoice);
+
+  // Process order if linked
+  if (invoice.order_id) {
+    await serviceClient
+      .from("orders")
+      .update({ status: "paid" })
+      .eq("id", invoice.order_id);
+
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      await fetch(`${supabaseUrl}/functions/v1/process-order`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify({ order_id: invoice.order_id }),
+      });
+    } catch (err) {
+      console.error("[paystack] Error triggering process-order:", err);
+    }
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -26,7 +156,6 @@ serve(async (req) => {
 
     const url = new URL(req.url);
     const pathParts = url.pathname.split("/").filter(Boolean);
-    // Last segment is the action: initialize, verify, webhook
     const action = pathParts[pathParts.length - 1] || "";
 
     // ─── WEBHOOK (no auth required) ─────────────────────────────────
@@ -34,7 +163,6 @@ serve(async (req) => {
       const body = await req.text();
       const sig = req.headers.get("x-paystack-signature") || "";
 
-      // Verify signature using HMAC SHA512
       const encoder = new TextEncoder();
       const key = await crypto.subtle.importKey(
         "raw",
@@ -63,58 +191,16 @@ serve(async (req) => {
           Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
         );
 
-        // Find invoice by payment_reference
         const { data: invoice } = await serviceClient
           .from("invoices")
           .select("*")
           .eq("payment_reference", reference)
-          .eq("status", "unpaid")
+          .in("status", ["unpaid", "overdue"])
           .maybeSingle();
 
         if (invoice) {
           console.log(`[paystack] Marking invoice ${invoice.id} as paid via webhook`);
-
-          await serviceClient
-            .from("invoices")
-            .update({
-              status: "paid",
-              paid_at: new Date().toISOString(),
-              payment_gateway: "paystack",
-            })
-            .eq("id", invoice.id);
-
-          // Record transaction
-          await serviceClient.from("transactions").insert({
-            user_id: invoice.user_id,
-            invoice_id: invoice.id,
-            amount: invoice.amount,
-            method: "paystack",
-            reference,
-          });
-
-          // Process order if linked
-          if (invoice.order_id) {
-            await serviceClient
-              .from("orders")
-              .update({ status: "paid" })
-              .eq("id", invoice.order_id);
-
-            // Trigger order processing
-            try {
-              const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-              const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-              await fetch(`${supabaseUrl}/functions/v1/process-order`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${serviceKey}`,
-                },
-                body: JSON.stringify({ order_id: invoice.order_id }),
-              });
-            } catch (err) {
-              console.error("[paystack] Error triggering process-order:", err);
-            }
-          }
+          await markInvoicePaidAndUnsuspend(serviceClient, invoice, reference);
         }
       }
 
@@ -157,7 +243,6 @@ serve(async (req) => {
         });
       }
 
-      // Fetch invoice (RLS ensures user owns it)
       const { data: invoice, error: invErr } = await supabase
         .from("invoices")
         .select("*")
@@ -178,7 +263,6 @@ serve(async (req) => {
         });
       }
 
-      // Amount in kobo/cents (Paystack expects smallest currency unit)
       const amountInSmallest = Math.round(Number(invoice.amount) * 100);
       const reference = `INV-${invoice.invoice_number}-${Date.now()}`;
 
@@ -212,7 +296,6 @@ serve(async (req) => {
         });
       }
 
-      // Save reference on invoice
       const serviceClient = createClient(
         Deno.env.get("SUPABASE_URL")!,
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -256,7 +339,6 @@ serve(async (req) => {
           Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
         );
 
-        // Find and update invoice
         const { data: invoice } = await serviceClient
           .from("invoices")
           .select("*")
@@ -264,46 +346,7 @@ serve(async (req) => {
           .maybeSingle();
 
         if (invoice && invoice.status !== "paid") {
-          await serviceClient
-            .from("invoices")
-            .update({
-              status: "paid",
-              paid_at: new Date().toISOString(),
-              payment_gateway: "paystack",
-            })
-            .eq("id", invoice.id);
-
-          // Record transaction
-          await serviceClient.from("transactions").insert({
-            user_id: invoice.user_id,
-            invoice_id: invoice.id,
-            amount: invoice.amount,
-            method: "paystack",
-            reference,
-          });
-
-          // Process order
-          if (invoice.order_id) {
-            await serviceClient
-              .from("orders")
-              .update({ status: "paid" })
-              .eq("id", invoice.order_id);
-
-            try {
-              const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-              const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-              await fetch(`${supabaseUrl}/functions/v1/process-order`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${serviceKey}`,
-                },
-                body: JSON.stringify({ order_id: invoice.order_id }),
-              });
-            } catch (err) {
-              console.error("[paystack] Error triggering process-order:", err);
-            }
-          }
+          await markInvoicePaidAndUnsuspend(serviceClient, invoice, reference);
         }
       }
 
