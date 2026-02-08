@@ -108,28 +108,28 @@ serve(async (req) => {
       // Check if hosting account already exists for this domain+user
       const { data: existingAccount } = await serviceClient
         .from("hosting_accounts")
-        .select("id")
+        .select("id, status")
         .eq("user_id", userId)
         .eq("domain", domain)
         .maybeSingle();
 
+      let accountId: string;
+
       if (existingAccount) {
-        // Update existing account to pending_dns (paid, waiting for DNS)
+        accountId = existingAccount.id;
         await serviceClient
           .from("hosting_accounts")
-          .update({ status: "pending_dns", plan_id: order.package_id })
+          .update({ status: "provisioning", plan_id: order.package_id })
           .eq("id", existingAccount.id);
-        results.hosting = { success: true, status: "pending_dns", account_id: existingAccount.id };
       } else {
-        // Create hosting account in pending_dns status
-        // Actual CyberPanel provisioning happens via check-dns when nameservers are confirmed
+        // Create hosting account in provisioning status
         const { data: newAccount, error: insertErr } = await serviceClient
           .from("hosting_accounts")
           .insert({
             user_id: userId,
             plan_id: order.package_id,
             domain,
-            status: "pending_dns",
+            status: "provisioning",
             hosting_type: hostingType,
           })
           .select()
@@ -139,8 +139,22 @@ serve(async (req) => {
           console.error("[process-order] Failed to create hosting account:", insertErr);
           results.hosting = { error: insertErr.message };
         } else {
-          results.hosting = { success: true, status: "pending_dns", account_id: newAccount.id };
+          accountId = newAccount.id;
         }
+      }
+
+      // ─── PROVISION VIA CYBERPANEL IMMEDIATELY ─────────────────────
+      // CyberPanel createWebsite automatically:
+      //   1. Creates PowerDNS zone
+      //   2. Adds SOA, NS, A (@), CNAME (www, ftp), MX, SPF/TXT, DKIM records
+      //   3. Sets up the website on the server
+      // No separate DNS zone/record creation needed.
+
+      if (accountId!) {
+        const provisionResult = await provisionOnCyberPanel(
+          serviceClient, domain, planName, accountId!, userId
+        );
+        results.hosting = provisionResult;
       }
 
       // Ensure domain record exists
@@ -156,11 +170,22 @@ serve(async (req) => {
           user_id: userId,
           domain_name: domain,
           domain_type: "primary",
-          status: "pending",
+          status: "active",
+          nameserver_1: "ns1.vintechdev.store",
+          nameserver_2: "ns2.vintechdev.store",
         });
+      } else {
+        await serviceClient
+          .from("domains")
+          .update({
+            nameserver_1: "ns1.vintechdev.store",
+            nameserver_2: "ns2.vintechdev.store",
+            status: "active",
+          })
+          .eq("id", existingDomain.id);
       }
 
-      console.log(`[process-order] Hosting set to pending_dns for ${domain}`);
+      console.log(`[process-order] Hosting provisioned for ${domain}`);
     }
 
     // ─── DOMAIN ORDER ───────────────────────────────────────────────
@@ -229,14 +254,14 @@ serve(async (req) => {
           .maybeSingle();
 
         if (profile?.email) {
-          let planName: string | undefined;
+          let emailPlanName: string | undefined;
           if (order.package_id) {
             const { data: plan } = await serviceClient
               .from("hosting_plans")
               .select("name")
               .eq("id", order.package_id)
               .maybeSingle();
-            planName = plan?.name;
+            emailPlanName = plan?.name;
           }
 
           const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -253,7 +278,7 @@ serve(async (req) => {
               data: {
                 firstName: profile.first_name,
                 domain: order.domain_name,
-                planName,
+                planName: emailPlanName,
               },
             }),
           });
@@ -279,3 +304,129 @@ serve(async (req) => {
     });
   }
 });
+
+/**
+ * Provision a website on CyberPanel immediately after payment.
+ * CyberPanel's createWebsite internally calls DNS.dnsTemplate() which:
+ *   - Creates a PowerDNS zone (NATIVE or MASTER)
+ *   - Adds NS records (from /home/cyberpanel/defaultNameservers)
+ *   - Adds SOA record
+ *   - Adds A record for @ pointing to server IP
+ *   - Adds CNAME for www and ftp
+ *   - Adds MX record + mail A record
+ *   - Adds SPF/TXT + DKIM records
+ */
+async function provisionOnCyberPanel(
+  serviceClient: ReturnType<typeof createClient>,
+  domain: string,
+  packageName: string,
+  accountId: string,
+  userId: string,
+): Promise<Record<string, unknown>> {
+  const CYBERPANEL_USER = Deno.env.get("CYBERPANEL_USER");
+  const CYBERPANEL_PASS = Deno.env.get("CYBERPANEL_PASS");
+  let VPS_API_URL = Deno.env.get("VPS_API_URL") || "https://panel.vintechcyber.com:8090/api";
+  if (!/^https?:\/\//i.test(VPS_API_URL)) VPS_API_URL = `http://${VPS_API_URL}`;
+  VPS_API_URL = VPS_API_URL.replace(/\/+$/, "");
+
+  if (!CYBERPANEL_USER || !CYBERPANEL_PASS) {
+    console.error("[process-order] CyberPanel credentials not configured");
+    await serviceClient
+      .from("hosting_accounts")
+      .update({ status: "pending_dns" })
+      .eq("id", accountId);
+    return { success: false, error: "CyberPanel credentials not configured", status: "pending_dns" };
+  }
+
+  try {
+    console.log(`[process-order] Provisioning website ${domain} via CyberPanel createWebsite`);
+
+    const ownerPassword = crypto.randomUUID().slice(0, 16);
+
+    const vpsRes = await fetch(`${VPS_API_URL}/createWebsite`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        adminUser: CYBERPANEL_USER,
+        adminPass: CYBERPANEL_PASS,
+        domainName: domain,
+        ownerEmail: `admin@${domain}`,
+        packageName,
+        websiteOwner: "admin",
+        ownerPassword,
+      }),
+    });
+
+    const vpsText = await vpsRes.text();
+    let vpsData: Record<string, unknown>;
+    try { vpsData = JSON.parse(vpsText); } catch { vpsData = { raw: vpsText }; }
+    console.log(`[process-order] CyberPanel createWebsite response:`, vpsData);
+
+    // Check for success — CyberPanel returns {"createWebSiteStatus": 1, ...} on success
+    const isSuccess = vpsRes.ok || vpsData.createWebSiteStatus === 1 || vpsData.success === true;
+
+    if (isSuccess) {
+      // Try to issue SSL (non-fatal if it fails)
+      try {
+        console.log(`[process-order] Issuing SSL for ${domain}`);
+        await fetch(`${VPS_API_URL}/issueSSL`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            adminUser: CYBERPANEL_USER,
+            adminPass: CYBERPANEL_PASS,
+            domainName: domain,
+          }),
+        });
+      } catch (sslErr) {
+        console.error(`[process-order] SSL issue error (non-fatal):`, sslErr);
+      }
+
+      // Update hosting account to active
+      await serviceClient
+        .from("hosting_accounts")
+        .update({
+          status: "active",
+          ssl_enabled: true,
+          cpanel_username: (vpsData.username as string) || null,
+        })
+        .eq("id", accountId);
+
+      return {
+        success: true,
+        status: "active",
+        account_id: accountId,
+        message: "Website created with DNS zone + all records on CyberPanel",
+      };
+    } else {
+      console.error(`[process-order] CyberPanel provisioning failed:`, vpsData);
+
+      // Fallback to pending_dns so user can retry via check-dns
+      await serviceClient
+        .from("hosting_accounts")
+        .update({ status: "pending_dns" })
+        .eq("id", accountId);
+
+      return {
+        success: false,
+        status: "pending_dns",
+        account_id: accountId,
+        provision_error: vpsData,
+      };
+    }
+  } catch (err) {
+    console.error(`[process-order] Provisioning error:`, err);
+
+    await serviceClient
+      .from("hosting_accounts")
+      .update({ status: "pending_dns" })
+      .eq("id", accountId);
+
+    return {
+      success: false,
+      status: "pending_dns",
+      account_id: accountId,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
