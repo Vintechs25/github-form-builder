@@ -20,6 +20,7 @@ import {
 import { useOutletContext } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { listEmails, createEmail, deleteEmail, changeEmailPassword } from "@/services/hostingService";
+import { usePlanLimits } from "@/hooks/usePlanLimits";
 import { toast } from "sonner";
 import type { User } from "@supabase/supabase-js";
 
@@ -27,6 +28,7 @@ interface ContextType { user: User | null; }
 
 const EmailAccounts = () => {
   const { user } = useOutletContext<ContextType>();
+  const { canCreate } = usePlanLimits(user?.id);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [selectedDomain, setSelectedDomain] = useState("");
   const [emails, setEmails] = useState<any[]>([]);
@@ -84,9 +86,15 @@ const EmailAccounts = () => {
     if (selectedDomain) fetchEmails();
   }, [selectedDomain]);
 
+  const emailLimitCheck = canCreate(selectedDomain, "email", emails.length);
+
   const handleCreate = async () => {
     if (!newEmail.username || !newEmail.password) {
       toast.error("Username and password are required");
+      return;
+    }
+    if (!emailLimitCheck.allowed) {
+      toast.error(emailLimitCheck.message);
       return;
     }
     setCreating(true);
@@ -156,12 +164,18 @@ const EmailAccounts = () => {
           <p className="text-sm text-muted-foreground">Create and manage email accounts for your domains</p>
         </div>
         {accounts.length > 0 && (
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-            <DialogTrigger asChild>
-              <Button variant="accent" size="sm">
-                <Plus className="w-4 h-4 mr-1" /> Create Email
-              </Button>
-            </DialogTrigger>
+          <div className="flex items-center gap-3">
+            {emailLimitCheck.limit > 0 && (
+              <span className={`text-xs font-medium ${emailLimitCheck.allowed ? "text-muted-foreground" : "text-destructive"}`}>
+                {emailLimitCheck.used}/{emailLimitCheck.limit} emails
+              </span>
+            )}
+            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+              <DialogTrigger asChild>
+                <Button variant="accent" size="sm" disabled={!emailLimitCheck.allowed}>
+                  <Plus className="w-4 h-4 mr-1" /> Create Email
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Create Email Account</DialogTitle>
@@ -208,6 +222,7 @@ const EmailAccounts = () => {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          </div>
         )}
       </div>
 

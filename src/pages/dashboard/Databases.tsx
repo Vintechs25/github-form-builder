@@ -20,6 +20,7 @@ import {
 import { useOutletContext } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { listDatabases, createDatabase, deleteDatabase } from "@/services/hostingService";
+import { usePlanLimits } from "@/hooks/usePlanLimits";
 import { toast } from "sonner";
 import type { User } from "@supabase/supabase-js";
 
@@ -27,6 +28,7 @@ interface ContextType { user: User | null; }
 
 const Databases = () => {
   const { user } = useOutletContext<ContextType>();
+  const { canCreate } = usePlanLimits(user?.id);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [selectedDomain, setSelectedDomain] = useState("");
   const [databases, setDatabases] = useState<any[]>([]);
@@ -69,9 +71,15 @@ const Databases = () => {
     if (selectedDomain) fetchDatabases();
   }, [selectedDomain]);
 
+  const dbLimitCheck = canCreate(selectedDomain, "database", databases.length);
+
   const handleCreate = async () => {
     if (!newDb.name || !newDb.username || !newDb.password) {
       toast.error("All fields are required");
+      return;
+    }
+    if (!dbLimitCheck.allowed) {
+      toast.error(dbLimitCheck.message);
       return;
     }
     setCreating(true);
@@ -133,12 +141,18 @@ const Databases = () => {
           <p className="text-sm text-muted-foreground">Create and manage MySQL databases for your websites</p>
         </div>
         {accounts.length > 0 && (
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="accent" size="sm">
-                <Plus className="w-4 h-4 mr-1" /> Create Database
-              </Button>
-            </DialogTrigger>
+          <div className="flex items-center gap-3">
+            {dbLimitCheck.limit > 0 && (
+              <span className={`text-xs font-medium ${dbLimitCheck.allowed ? "text-muted-foreground" : "text-destructive"}`}>
+                {dbLimitCheck.used}/{dbLimitCheck.limit} databases
+              </span>
+            )}
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="accent" size="sm" disabled={!dbLimitCheck.allowed}>
+                  <Plus className="w-4 h-4 mr-1" /> Create Database
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Create New Database</DialogTitle>
@@ -186,6 +200,7 @@ const Databases = () => {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          </div>
         )}
       </div>
 
