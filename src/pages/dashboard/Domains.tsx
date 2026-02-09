@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useOutletContext, useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { usePlanLimits } from "@/hooks/usePlanLimits";
 import type { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +20,7 @@ interface ContextType { user: User | null; }
 const Domains = () => {
   const { user } = useOutletContext<ContextType>();
   const navigate = useNavigate();
+  const { accounts: hostingAccounts, canCreate } = usePlanLimits(user?.id);
   const [domains, setDomains] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -39,8 +41,15 @@ const Domains = () => {
 
   useEffect(() => { fetchDomains(); }, [user]);
 
+  const primaryDomain = hostingAccounts[0]?.domain || "";
+  const domainLimitCheck = canCreate(primaryDomain, "domain", domains.length);
+
   const handleCreate = async () => {
     if (!user || !domainName.trim()) return;
+    if (!domainLimitCheck.allowed) {
+      toast.error(domainLimitCheck.message);
+      return;
+    }
     setCreating(true);
     const { error } = await supabase.from("domains").insert({
       user_id: user.id,
@@ -81,9 +90,14 @@ const Domains = () => {
               <Search className="w-4 h-4 mr-1" /> Search Domains
             </Button>
           </Link>
+          {domainLimitCheck.limit > 0 && (
+            <span className={`text-xs font-medium ${domainLimitCheck.allowed ? "text-muted-foreground" : "text-destructive"}`}>
+              {domainLimitCheck.used}/{domainLimitCheck.limit} domains
+            </span>
+          )}
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button variant="accent" size="sm">
+              <Button variant="accent" size="sm" disabled={!domainLimitCheck.allowed}>
                 <Plus className="w-4 h-4 mr-1" /> Add Domain
               </Button>
             </DialogTrigger>
