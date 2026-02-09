@@ -57,7 +57,7 @@ const ALL_ACTIONS = [...Object.keys(OFFICIAL_API), ...Object.keys(SESSION_API)];
 
 // ─── Helper: Get CyberPanel base URL ───────────────────────────────────────
 function getCyberPanelUrl(): string {
-  let url = Deno.env.get("VPS_API_URL") || "https://panel.vintechcyber.com:8090";
+  let url = Deno.env.get("VPS_API_URL") || "https://panel.vintechdev.store:8090";
   if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
   url = url.replace(/\/+$/, "");
   // Remove /api suffix if present (we'll add specific paths)
