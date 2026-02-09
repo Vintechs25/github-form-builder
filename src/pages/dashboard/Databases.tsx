@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
-  Database, Plus, Trash2, Copy, Eye, EyeOff, Loader2, RefreshCw,
-  ExternalLink, AlertCircle, CheckCircle2,
+  Database, Plus, Trash2, Copy, Loader2, RefreshCw, ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,17 +35,16 @@ const Databases = () => {
   const [loadingDbs, setLoadingDbs] = useState(false);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
-  const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newDb, setNewDb] = useState({ name: "", username: "", password: "" });
-  const [localDbs, setLocalDbs] = useState<any[]>([]);
+  // Panel URL for phpMyAdmin
+  const PANEL_HOST = "panel.vintechcyber.com";
 
   useEffect(() => {
     if (!user) return;
     const load = async () => {
       const { data: accs } = await supabase.from("hosting_accounts").select("id, domain, status").eq("user_id", user.id).eq("status", "active");
       setAccounts(accs || []);
-      setLocalDbs([]);
       if (accs && accs.length > 0) setSelectedDomain(accs[0].domain);
       setLoading(false);
     };
@@ -238,8 +236,7 @@ const Databases = () => {
             </div>
           ) : (
             <>
-              {/* Show local DB records */}
-              {localDbs.length > 0 && (
+              {databases.length > 0 ? (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
                   <div className="bg-card rounded-xl border border-border overflow-hidden">
                     <div className="p-4 border-b border-border">
@@ -252,19 +249,16 @@ const Databases = () => {
                         <TableRow>
                           <TableHead>Database Name</TableHead>
                           <TableHead>Username</TableHead>
-                          <TableHead>Host</TableHead>
-                          <TableHead>Port</TableHead>
-                          <TableHead>Website</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {localDbs.map((db) => (
-                          <TableRow key={db.id}>
+                        {databases.map((db: any) => (
+                          <TableRow key={db.id || db.dbName}>
                             <TableCell>
                               <div className="flex items-center gap-2">
-                                <span className="font-mono text-sm font-medium">{db.db_name}</span>
-                                <button onClick={() => copyToClipboard(db.db_name, "Database name")}
+                                <span className="font-mono text-sm font-medium">{db.dbName}</span>
+                                <button onClick={() => copyToClipboard(db.dbName, "Database name")}
                                   className="text-muted-foreground hover:text-foreground">
                                   <Copy className="w-3.5 h-3.5" />
                                 </button>
@@ -272,25 +266,22 @@ const Databases = () => {
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
-                                <span className="font-mono text-sm">{db.db_username}</span>
-                                <button onClick={() => copyToClipboard(db.db_username, "Username")}
+                                <span className="font-mono text-sm">{db.dbUser}</span>
+                                <button onClick={() => copyToClipboard(db.dbUser, "Username")}
                                   className="text-muted-foreground hover:text-foreground">
                                   <Copy className="w-3.5 h-3.5" />
                                 </button>
                               </div>
                             </TableCell>
-                            <TableCell className="font-mono text-sm">{db.db_host}</TableCell>
-                            <TableCell>{db.db_port}</TableCell>
-                            <TableCell className="text-muted-foreground">{db.hosting_accounts?.domain || "—"}</TableCell>
                             <TableCell className="text-right">
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 className="text-destructive hover:text-destructive"
-                                disabled={deleting === db.db_name}
-                                onClick={() => handleDelete(db.db_name)}
+                                disabled={deleting === db.dbName}
+                                onClick={() => handleDelete(db.dbName)}
                               >
-                                {deleting === db.db_name ? (
+                                {deleting === db.dbName ? (
                                   <Loader2 className="w-4 h-4 animate-spin" />
                                 ) : (
                                   <Trash2 className="w-4 h-4" />
@@ -303,9 +294,7 @@ const Databases = () => {
                     </Table>
                   </div>
                 </motion.div>
-              )}
-
-              {localDbs.length === 0 && databases.length === 0 && (
+              ) : (
                 <div className="bg-card rounded-xl border border-border p-12 text-center">
                   <Database className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
                   <h3 className="font-semibold mb-1">No databases yet</h3>
@@ -335,10 +324,7 @@ const Databases = () => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  const vpsUrl = import.meta.env.VITE_SUPABASE_URL ? "" : "";
-                  window.open(`https://${selectedDomain}:8090/dataBases/phpMyAdmin`, "_blank");
-                }}
+                onClick={() => window.open(`https://${PANEL_HOST}:8090/dataBases/phpMyAdmin`, "_blank")}
               >
                 <ExternalLink className="w-4 h-4 mr-1" /> Open phpMyAdmin
               </Button>
