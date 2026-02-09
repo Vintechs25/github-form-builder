@@ -42,12 +42,9 @@ const Databases = () => {
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      const [{ data: accs }, { data: dbs }] = await Promise.all([
-        supabase.from("hosting_accounts").select("id, domain, status").eq("user_id", user.id).eq("status", "active"),
-        supabase.from("hosting_databases").select("*, hosting_accounts(domain)").eq("user_id", user.id),
-      ]);
+      const { data: accs } = await supabase.from("hosting_accounts").select("id, domain, status").eq("user_id", user.id).eq("status", "active");
       setAccounts(accs || []);
-      setLocalDbs(dbs || []);
+      setLocalDbs([]);
       if (accs && accs.length > 0) setSelectedDomain(accs[0].domain);
       setLoading(false);
     };
