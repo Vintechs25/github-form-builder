@@ -446,43 +446,35 @@ serve(async (req) => {
           bodyParams.fileContent = params.content;
           break;
         case "upload-file": {
-          // Upload uses multipart/form-data, handled separately
+          // Use write-file via controller endpoint (upload endpoint has auth issues)
           const uploadPath = params.path || `/home/${params.domain}/public_html`;
           const fileData = params.fileData as string; // base64 encoded
           const fileName = params.fileName as string;
+          const completePath = `${uploadPath}/${fileName}`;
           
-          // Decode base64 to binary
-          const binaryStr = atob(fileData);
-          const bytes = new Uint8Array(binaryStr.length);
-          for (let i = 0; i < binaryStr.length; i++) {
-            bytes[i] = binaryStr.charCodeAt(i);
-          }
+          // Decode base64 to text content
+          const content = atob(fileData);
           
-          const csrfMatch2 = sessionCookie.match(/csrftoken=([^;]+)/);
-          const csrfToken2 = csrfMatch2 ? csrfMatch2[1] : "";
+          console.log(`[vps-api] Upload file via write: ${fileName} → ${completePath} (${content.length} bytes)`);
           
-          const formData = new FormData();
-          formData.append("file", new Blob([bytes]), fileName);
-          formData.append("completePath", `${uploadPath}/${fileName}`);
-          formData.append("csrfmiddlewaretoken", csrfToken2);
-          
-          console.log(`[vps-api] Upload file: ${fileName} → ${uploadPath}`);
-          const uploadRes = await fetch(`${baseUrl}${path}`, {
-            method: "POST",
-            headers: {
-              "Cookie": sessionCookie,
-              "X-CSRFToken": csrfToken2,
-              "Referer": `${baseUrl}/`,
-            },
-            body: formData,
+          // First create the file, then write content
+          const createResult = await callSessionApi(baseUrl, "/filemanager/controller", sessionCookie, {
+            method: "createNewFile",
+            domainName: params.domain as string,
+            fileName: completePath,
           });
+          console.log(`[vps-api] Create file result:`, createResult.data);
           
-          const uploadText = await uploadRes.text();
-          let uploadData: Record<string, unknown>;
-          try { uploadData = JSON.parse(uploadText); } catch { uploadData = { raw: uploadText }; }
+          // Write content to the file
+          const writeResult = await callSessionApi(baseUrl, "/filemanager/controller", sessionCookie, {
+            method: "writeFileContents",
+            domainName: params.domain as string,
+            fileName: completePath,
+            fileContent: content,
+          });
+          console.log(`[vps-api] Write file result:`, writeResult.data);
           
-          console.log(`[vps-api] Upload response: status=${uploadRes.status}`, uploadData);
-          result = { ok: uploadRes.ok || uploadRes.status === 302, status: uploadRes.status, data: uploadData };
+          result = writeResult;
           break;
         }
         default:
