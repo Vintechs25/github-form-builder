@@ -3,11 +3,12 @@ import { motion } from "framer-motion";
 import {
   Upload, FolderOpen, File, Folder, Trash2, Plus, Download,
   Edit3, Loader2, RefreshCw, ArrowLeft, FileText, Image, Code,
-  ChevronRight, Search, Save, X, FilePlus,
+  ChevronRight, Search, Save, X, FilePlus, UploadCloud,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
@@ -28,7 +29,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   listFiles, createFile, createFolder, deleteFiles, renameFile,
-  readFile, writeFile,
+  readFile, writeFile, uploadFile,
 } from "@/services/hostingService";
 import type { User } from "@supabase/supabase-js";
 
@@ -66,6 +67,10 @@ const FileManager = () => {
   const [editorContent, setEditorContent] = useState("");
   const [editorLoading, setEditorLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Load hosting accounts
   useEffect(() => {
@@ -250,6 +255,44 @@ const FileManager = () => {
     }
   };
 
+  const handleUpload = async () => {
+    if (uploadFiles.length === 0) return;
+    setUploading(true);
+    setUploadProgress(0);
+    let uploaded = 0;
+    try {
+      for (const file of uploadFiles) {
+        const reader = new FileReader();
+        const base64 = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.split(",")[1]); // strip data:...;base64, prefix
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        await uploadFile(selectedDomain, currentPath, file.name, base64);
+        uploaded++;
+        setUploadProgress(Math.round((uploaded / uploadFiles.length) * 100));
+      }
+      toast.success(`${uploaded} file${uploaded > 1 ? "s" : ""} uploaded`);
+      setUploadOpen(false);
+      setUploadFiles([]);
+      fetchFiles();
+    } catch (err: any) {
+      toast.error(err.message || "Upload failed");
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const handleFileDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    setUploadFiles((prev) => [...prev, ...droppedFiles]);
+  };
+
   const displayFiles = searchQuery
     ? files.filter((f) => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
     : files;
@@ -275,6 +318,9 @@ const FileManager = () => {
           </Button>
           <Button variant="outline" size="sm" onClick={() => setCreateFolderOpen(true)}>
             <Plus className="w-4 h-4 mr-1" /> New Folder
+          </Button>
+          <Button size="sm" onClick={() => setUploadOpen(true)}>
+            <UploadCloud className="w-4 h-4 mr-1" /> Upload
           </Button>
         </div>
       </div>
@@ -579,6 +625,70 @@ const FileManager = () => {
             <Button onClick={handleSaveFile} disabled={saving || editorLoading}>
               {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
               Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Upload Dialog */}
+      <Dialog open={uploadOpen} onOpenChange={(open) => { if (!uploading) { setUploadOpen(open); if (!open) setUploadFiles([]); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Upload Files</DialogTitle>
+            <DialogDescription>Upload files to {currentPath}</DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div
+              className="border-2 border-dashed border-border rounded-xl p-8 text-center cursor-pointer hover:border-accent transition-colors"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleFileDrop}
+              onClick={() => document.getElementById("file-upload-input")?.click()}
+            >
+              <UploadCloud className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+              <p className="text-sm font-medium">Drag & drop files here or click to browse</p>
+              <p className="text-xs text-muted-foreground mt-1">Max 20MB per file</p>
+              <input
+                id="file-upload-input"
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files) setUploadFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+                }}
+              />
+            </div>
+            {uploadFiles.length > 0 && (
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {uploadFiles.map((f, i) => (
+                  <div key={i} className="flex items-center justify-between bg-secondary/50 rounded-lg px-3 py-2 text-sm">
+                    <div className="flex items-center gap-2 truncate">
+                      <File className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="truncate">{f.name}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {(f.size / 1024).toFixed(1)} KB
+                      </span>
+                    </div>
+                    {!uploading && (
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setUploadFiles((prev) => prev.filter((_, idx) => idx !== i))}>
+                        <X className="w-3 h-3" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {uploading && (
+              <div className="space-y-2">
+                <Progress value={uploadProgress} className="h-2" />
+                <p className="text-xs text-muted-foreground text-center">{uploadProgress}% complete</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setUploadOpen(false); setUploadFiles([]); }} disabled={uploading}>Cancel</Button>
+            <Button onClick={handleUpload} disabled={uploading || uploadFiles.length === 0}>
+              {uploading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Upload className="w-4 h-4 mr-1" />}
+              Upload {uploadFiles.length > 0 && `(${uploadFiles.length})`}
             </Button>
           </DialogFooter>
         </DialogContent>

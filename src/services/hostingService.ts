@@ -168,6 +168,10 @@ export async function listFiles(domain: string, path?: string) {
   return callVpsApi("list-files", { domain, path });
 }
 
+export async function uploadFile(domain: string, path: string, fileName: string, fileData: string) {
+  return callVpsApi("upload-file" as any, { domain, path, fileName, fileData });
+}
+
 export async function createFile(domain: string, path: string) {
   return callVpsApi("create-file", { domain, path });
 }

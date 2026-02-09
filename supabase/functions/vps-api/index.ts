@@ -50,6 +50,7 @@ const SESSION_API: Record<string, string> = {
   "rename-file": "/filemanager/controller",
   "read-file": "/filemanager/controller",
   "write-file": "/filemanager/controller",
+  "upload-file": "/filemanager/upload",
 };
 
 const ALL_ACTIONS = [...Object.keys(OFFICIAL_API), ...Object.keys(SESSION_API)];
@@ -444,11 +445,53 @@ serve(async (req) => {
           bodyParams.fileName = params.path;
           bodyParams.fileContent = params.content;
           break;
+        case "upload-file": {
+          // Upload uses multipart/form-data, handled separately
+          const uploadPath = params.path || `/home/${params.domain}/public_html`;
+          const fileData = params.fileData as string; // base64 encoded
+          const fileName = params.fileName as string;
+          
+          // Decode base64 to binary
+          const binaryStr = atob(fileData);
+          const bytes = new Uint8Array(binaryStr.length);
+          for (let i = 0; i < binaryStr.length; i++) {
+            bytes[i] = binaryStr.charCodeAt(i);
+          }
+          
+          const formData = new FormData();
+          formData.append("myfile", new Blob([bytes]), fileName);
+          formData.append("completePath", uploadPath);
+          formData.append("domainName", params.domain as string);
+          
+          const csrfMatch = sessionCookie.match(/csrftoken=([^;]+)/);
+          const csrfToken = csrfMatch ? csrfMatch[1] : "";
+          
+          console.log(`[vps-api] Upload file: ${fileName} → ${uploadPath}`);
+          const uploadRes = await fetch(`${baseUrl}${path}`, {
+            method: "POST",
+            headers: {
+              "Cookie": sessionCookie,
+              "X-CSRFToken": csrfToken,
+              "Referer": `${baseUrl}/`,
+            },
+            body: formData,
+          });
+          
+          const uploadText = await uploadRes.text();
+          let uploadData: Record<string, unknown>;
+          try { uploadData = JSON.parse(uploadText); } catch { uploadData = { raw: uploadText }; }
+          
+          console.log(`[vps-api] Upload response: status=${uploadRes.status}`, uploadData);
+          result = { ok: uploadRes.ok || uploadRes.status === 302, status: uploadRes.status, data: uploadData };
+          break;
+        }
         default:
           Object.assign(bodyParams, params);
       }
 
-      result = await callSessionApi(baseUrl, path, sessionCookie, bodyParams);
+      if (action !== "upload-file") {
+        result = await callSessionApi(baseUrl, path, sessionCookie, bodyParams);
+      }
     }
 
     console.log(`[vps-api] Response for ${action}: status=${result.status}`, result.data);
