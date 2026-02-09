@@ -342,6 +342,7 @@ serve(async (req) => {
           bodyParams.dbName = params.dbName;
           bodyParams.dbUsername = params.dbUsername;
           bodyParams.dbPassword = params.dbPassword;
+          bodyParams.webUserName = params.webUserName || "admin";
           break;
         case "delete-database":
           bodyParams.dbName = params.dbName;

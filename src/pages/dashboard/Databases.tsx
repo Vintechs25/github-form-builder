@@ -76,7 +76,12 @@ const Databases = () => {
     }
     setCreating(true);
     try {
-      await createDatabase(selectedDomain, newDb.name, newDb.username, newDb.password);
+      const result = await createDatabase(selectedDomain, newDb.name, newDb.username, newDb.password);
+      if (result?.status === 0 || result?.createDBStatus === 0) {
+        toast.error(result.error_message || "Failed to create database");
+        setCreating(false);
+        return;
+      }
       toast.success(`Database "${newDb.name}" created successfully`);
       setDialogOpen(false);
       setNewDb({ name: "", username: "", password: "" });
