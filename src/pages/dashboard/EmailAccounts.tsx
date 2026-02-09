@@ -60,9 +60,20 @@ const EmailAccounts = () => {
     setLoadingEmails(true);
     try {
       const result = await listEmails(selectedDomain);
+      if (result?.status === 404 || result?.error?.includes("404")) {
+        toast.error("Mail server is not available. Please enable the mail server on your hosting panel first.");
+        setEmails([]);
+        return;
+      }
       const data = result?.data?.data ? JSON.parse(result.data.data) : result?.data || [];
       setEmails(Array.isArray(data) ? data : []);
     } catch (err: any) {
+      const msg = err?.message || "";
+      if (msg.includes("404") || msg.includes("Not Found")) {
+        toast.error("Mail server is not available on this server. Please enable it from CyberPanel → Server Status → Services.");
+      } else {
+        toast.error(msg || "Failed to list emails");
+      }
       console.error("Failed to list emails:", err);
       setEmails([]);
     }
