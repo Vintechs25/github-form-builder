@@ -83,83 +83,26 @@ function extractCookies(res: Response): string[] {
 // ─── Helper: Login to CyberPanel to get session + CSRF ─────────────────────
 async function getCyberPanelSession(baseUrl: string, user: string, pass: string): Promise<string | null> {
   try {
-    // Step 1: GET login page to get initial CSRF token
-    console.log(`[vps-api] Step 1: GET login page for CSRF token...`);
-    const pageRes = await fetch(`${baseUrl}/`, { method: "GET", redirect: "manual" });
-    const pageCookies = extractCookies(pageRes);
-    
-    // Also try extracting CSRF from HTML form
-    const pageBody = await pageRes.text();
-    let csrfToken = "";
-    const csrfCookie = pageCookies.find(c => c.startsWith("csrftoken="));
-    if (csrfCookie) {
-      csrfToken = csrfCookie.split("=")[1];
-    }
-    // Fallback: extract from hidden input in HTML
-    if (!csrfToken) {
-      const match = pageBody.match(/csrfmiddlewaretoken['"]?\s*value=['"]([^'"]+)['"]/);
-      if (match) csrfToken = match[1];
-    }
-    
-    console.log(`[vps-api] CSRF token: ${csrfToken ? csrfToken.substring(0, 10) + "..." : "none"}`);
-    console.log(`[vps-api] Page cookies: ${pageCookies.join("; ")}`);
-    
-    // Step 2: POST to verifyLogin with form data (Django expects form POST)
-    console.log(`[vps-api] Step 2: POST verifyLogin...`);
-    const loginRes = await fetch(`${baseUrl}/verifyLogin`, {
+    // Use loginAPI directly (avoids SSL issues with the root page CSRF flow)
+    console.log(`[vps-api] Logging in via loginAPI...`);
+    const apiRes = await fetch(`${baseUrl}/api/loginAPI`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Cookie": pageCookies.join("; "),
-        "X-CSRFToken": csrfToken,
-        "Referer": `${baseUrl}/`,
-      },
-      body: new URLSearchParams({
-        username: user,
-        password: pass,
-        csrfmiddlewaretoken: csrfToken,
-        languageSelection: "english",
-      }).toString(),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ username: user, password: pass }).toString(),
       redirect: "manual",
     });
+    const apiCookies = extractCookies(apiRes);
+    const apiBody = await apiRes.text();
+    console.log(`[vps-api] loginAPI status: ${apiRes.status}, cookies: ${apiCookies.join("; ")}`);
+    console.log(`[vps-api] loginAPI body: ${apiBody.substring(0, 200)}`);
 
-    console.log(`[vps-api] verifyLogin status: ${loginRes.status}`);
-    const loginCookies = extractCookies(loginRes);
-    console.log(`[vps-api] verifyLogin cookies: ${loginCookies.join("; ")}`);
-
-    // Merge all cookies
-    const allCookiesMap = new Map<string, string>();
-    for (const c of [...pageCookies, ...loginCookies]) {
+    const cookieMap = new Map<string, string>();
+    for (const c of apiCookies) {
       const [name] = c.split("=");
-      allCookiesMap.set(name, c);
+      cookieMap.set(name, c);
     }
-    
-    const cookieString = [...allCookiesMap.values()].join("; ");
-    const hasSession = cookieString.includes("sessionid=");
-    
-    if (!hasSession) {
-      // Fallback: try loginAPI endpoint
-      console.log(`[vps-api] No sessionid from verifyLogin, trying loginAPI...`);
-      const apiRes = await fetch(`${baseUrl}/api/loginAPI`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ username: user, password: pass }).toString(),
-        redirect: "manual",
-      });
-      const apiCookies = extractCookies(apiRes);
-      const apiBody = await apiRes.text();
-      console.log(`[vps-api] loginAPI status: ${apiRes.status}, cookies: ${apiCookies.join("; ")}`);
-      console.log(`[vps-api] loginAPI body: ${apiBody.substring(0, 200)}`);
-      
-      for (const c of apiCookies) {
-        const [name] = c.split("=");
-        allCookiesMap.set(name, c);
-      }
-      const finalCookies = [...allCookiesMap.values()].join("; ");
-      return finalCookies.includes("sessionid=") ? finalCookies : null;
-    }
-    
-    return cookieString;
+    const cookieString = [...cookieMap.values()].join("; ");
+    return cookieString.includes("sessionid=") ? cookieString : null;
   } catch (err) {
     console.error(`[vps-api] Login error:`, err);
     return null;
