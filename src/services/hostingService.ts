@@ -46,8 +46,18 @@ export async function callVpsApi(action: VpsAction, params: Record<string, unkno
     body: { action, ...params },
   });
   if (error) {
-    // Try to extract a meaningful message from the response
-    const msg = (data as any)?.error || error.message || "API call failed";
+    // supabase.functions.invoke sets data=null on non-2xx; try reading error context
+    let msg = "API call failed";
+    try {
+      if ('context' in error && (error as any).context?.body) {
+        const body = await (error as any).context.json();
+        msg = body?.error || msg;
+      } else {
+        msg = error.message || msg;
+      }
+    } catch {
+      msg = error.message || msg;
+    }
     throw new Error(msg);
   }
   if (data && data.error) {
