@@ -27,10 +27,10 @@ const SESSION_API: Record<string, string> = {
   "create-database": "/dataBases/submitDBCreation",
   "delete-database": "/dataBases/submitDatabaseDeletion",
   // Email operations
-  "list-emails": "/mailServer/getEmailsForDomain",
+  "list-emails": "/mailServer/fetchEmails",
   "create-email": "/mailServer/submitEmailCreation",
   "delete-email": "/mailServer/submitEmailDeletion",
-  "change-email-password": "/mailServer/changePasswordEmail",
+  "change-email-password": "/mailServer/submitPasswordChange",
   // DNS operations
   "create-dns-zone": "/dns/zoneCreation",
   "add-dns-record": "/dns/addDNSRecord",
