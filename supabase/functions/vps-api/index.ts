@@ -490,8 +490,12 @@ serve(async (req) => {
     console.log(`[vps-api] Response for ${action}: status=${result.status}`, result.data);
 
     if (!result.ok && result.status >= 400) {
+      const isMailAction = ["list-emails", "create-email", "delete-email", "change-email-password"].includes(action);
+      const errorMsg = (isMailAction && result.status === 404)
+        ? "Mail server is not installed or enabled on this server"
+        : "Server request failed";
       return new Response(
-        JSON.stringify({ error: "Server request failed", status: result.status, details: result.data }),
+        JSON.stringify({ error: errorMsg, status: result.status, details: result.data }),
         { status: result.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
