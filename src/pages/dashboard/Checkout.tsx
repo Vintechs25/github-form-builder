@@ -91,7 +91,7 @@ const Checkout = () => {
           type: "hosting",
           total_amount: price,
           status: "pending",
-          package_id: plan.id,
+          plan_id: plan.id,
           billing_cycle: state.billingCycle,
           domain_name: state.domain,
         })
