@@ -16,7 +16,7 @@ interface ContextType { user: User | null; }
 
 interface DnsRecord {
   id: string;
-  type: string;
+  record_type: string;
   host: string;
   value: string;
   ttl: number;
@@ -77,7 +77,7 @@ const DnsManager = () => {
       const { error } = await supabase.from("dns_records").insert({
         domain_id: id,
         user_id: user.id,
-        type: newType,
+        record_type: newType,
         host: newHost.trim() || "@",
         value: newValue.trim(),
         ttl: parseInt(newTtl) || 3600,
@@ -223,7 +223,7 @@ const DnsManager = () => {
                 <TableRow key={r.id}>
                   <TableCell>
                     <span className="px-2 py-1 rounded bg-accent/10 text-accent text-xs font-mono font-semibold">
-                      {r.type}
+                      {r.record_type}
                     </span>
                   </TableCell>
                   <TableCell className="font-mono text-sm">{r.host}</TableCell>

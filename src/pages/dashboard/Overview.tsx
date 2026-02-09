@@ -29,7 +29,7 @@ const Overview = () => {
         websites: accs.filter((a) => a.status === "active").length,
         pendingDns: accs.filter((a) => a.status === "pending_dns").length,
         storageMb: accs.reduce((s, a) => s + (a.storage_used_mb || 0), 0),
-        bandwidthMb: accs.reduce((s, a) => s + (a.bandwidth_used_mb || 0), 0),
+        bandwidthMb: 0,
         tickets: tickets?.length || 0,
       });
     };

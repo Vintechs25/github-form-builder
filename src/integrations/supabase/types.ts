@@ -20,9 +20,9 @@ export type Database = {
           domain_id: string
           host: string
           id: string
+          priority: number | null
+          record_type: string
           ttl: number
-          type: string
-          updated_at: string
           user_id: string
           value: string
         }
@@ -31,9 +31,9 @@ export type Database = {
           domain_id: string
           host?: string
           id?: string
+          priority?: number | null
+          record_type?: string
           ttl?: number
-          type?: string
-          updated_at?: string
           user_id: string
           value: string
         }
@@ -42,9 +42,9 @@ export type Database = {
           domain_id?: string
           host?: string
           id?: string
+          priority?: number | null
+          record_type?: string
           ttl?: number
-          type?: string
-          updated_at?: string
           user_id?: string
           value?: string
         }
@@ -70,12 +70,11 @@ export type Database = {
           markup_type: string
           register_price: number
           renew_price: number
-          sell_price_register: number | null
-          sell_price_renew: number | null
-          sell_price_transfer: number | null
+          sell_price_register: number
+          sell_price_renew: number
+          sell_price_transfer: number
           tld: string
           transfer_price: number
-          updated_at: string
         }
         Insert: {
           created_at?: string
@@ -88,12 +87,11 @@ export type Database = {
           markup_type?: string
           register_price?: number
           renew_price?: number
-          sell_price_register?: number | null
-          sell_price_renew?: number | null
-          sell_price_transfer?: number | null
+          sell_price_register?: number
+          sell_price_renew?: number
+          sell_price_transfer?: number
           tld: string
           transfer_price?: number
-          updated_at?: string
         }
         Update: {
           created_at?: string
@@ -106,12 +104,11 @@ export type Database = {
           markup_type?: string
           register_price?: number
           renew_price?: number
-          sell_price_register?: number | null
-          sell_price_renew?: number | null
-          sell_price_transfer?: number | null
+          sell_price_register?: number
+          sell_price_renew?: number
+          sell_price_transfer?: number
           tld?: string
           transfer_price?: number
-          updated_at?: string
         }
         Relationships: []
       }
@@ -121,10 +118,7 @@ export type Database = {
           domain_name: string
           domain_type: string
           expires_at: string | null
-          hosting_account_id: string | null
           id: string
-          nameserver_1: string | null
-          nameserver_2: string | null
           registrar: string | null
           status: string
           updated_at: string
@@ -135,10 +129,7 @@ export type Database = {
           domain_name: string
           domain_type?: string
           expires_at?: string | null
-          hosting_account_id?: string | null
           id?: string
-          nameserver_1?: string | null
-          nameserver_2?: string | null
           registrar?: string | null
           status?: string
           updated_at?: string
@@ -149,33 +140,18 @@ export type Database = {
           domain_name?: string
           domain_type?: string
           expires_at?: string | null
-          hosting_account_id?: string | null
           id?: string
-          nameserver_1?: string | null
-          nameserver_2?: string | null
           registrar?: string | null
           status?: string
           updated_at?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "domains_hosting_account_id_fkey"
-            columns: ["hosting_account_id"]
-            isOneToOne: false
-            referencedRelation: "hosting_accounts"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       hosting_accounts: {
         Row: {
-          bandwidth_used_mb: number
-          cpanel_username: string | null
           created_at: string
           domain: string
-          expires_at: string | null
-          ftp_username: string | null
           hosting_type: string
           id: string
           plan_id: string | null
@@ -184,15 +160,10 @@ export type Database = {
           storage_used_mb: number
           updated_at: string
           user_id: string
-          wordpress_url: string | null
         }
         Insert: {
-          bandwidth_used_mb?: number
-          cpanel_username?: string | null
           created_at?: string
           domain: string
-          expires_at?: string | null
-          ftp_username?: string | null
           hosting_type?: string
           id?: string
           plan_id?: string | null
@@ -201,15 +172,10 @@ export type Database = {
           storage_used_mb?: number
           updated_at?: string
           user_id: string
-          wordpress_url?: string | null
         }
         Update: {
-          bandwidth_used_mb?: number
-          cpanel_username?: string | null
           created_at?: string
           domain?: string
-          expires_at?: string | null
-          ftp_username?: string | null
           hosting_type?: string
           id?: string
           plan_id?: string | null
@@ -218,7 +184,6 @@ export type Database = {
           storage_used_mb?: number
           updated_at?: string
           user_id?: string
-          wordpress_url?: string | null
         }
         Relationships: [
           {
@@ -226,47 +191,6 @@ export type Database = {
             columns: ["plan_id"]
             isOneToOne: false
             referencedRelation: "hosting_plans"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      hosting_databases: {
-        Row: {
-          created_at: string
-          db_host: string
-          db_name: string
-          db_port: number
-          db_username: string
-          hosting_account_id: string
-          id: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          db_host?: string
-          db_name: string
-          db_port?: number
-          db_username: string
-          hosting_account_id: string
-          id?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          db_host?: string
-          db_name?: string
-          db_port?: number
-          db_username?: string
-          hosting_account_id?: string
-          id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "hosting_databases_hosting_account_id_fkey"
-            columns: ["hosting_account_id"]
-            isOneToOne: false
-            referencedRelation: "hosting_accounts"
             referencedColumns: ["id"]
           },
         ]
@@ -329,33 +253,27 @@ export type Database = {
         Row: {
           amount: number
           created_at: string
-          currency: string
           description: string | null
           due_date: string
-          hosting_account_id: string | null
           id: string
           invoice_number: string
           order_id: string | null
           paid_at: string | null
           payment_gateway: string | null
-          payment_reference: string | null
           status: string
           updated_at: string
           user_id: string
         }
         Insert: {
-          amount: number
+          amount?: number
           created_at?: string
-          currency?: string
           description?: string | null
-          due_date: string
-          hosting_account_id?: string | null
+          due_date?: string
           id?: string
           invoice_number: string
           order_id?: string | null
           paid_at?: string | null
           payment_gateway?: string | null
-          payment_reference?: string | null
           status?: string
           updated_at?: string
           user_id: string
@@ -363,28 +281,18 @@ export type Database = {
         Update: {
           amount?: number
           created_at?: string
-          currency?: string
           description?: string | null
           due_date?: string
-          hosting_account_id?: string | null
           id?: string
           invoice_number?: string
           order_id?: string | null
           paid_at?: string | null
           payment_gateway?: string | null
-          payment_reference?: string | null
           status?: string
           updated_at?: string
           user_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "invoices_hosting_account_id_fkey"
-            columns: ["hosting_account_id"]
-            isOneToOne: false
-            referencedRelation: "hosting_accounts"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "invoices_order_id_fkey"
             columns: ["order_id"]
@@ -400,7 +308,7 @@ export type Database = {
           created_at: string
           domain_name: string | null
           id: string
-          package_id: string | null
+          plan_id: string | null
           status: string
           total_amount: number
           type: string
@@ -412,7 +320,7 @@ export type Database = {
           created_at?: string
           domain_name?: string | null
           id?: string
-          package_id?: string | null
+          plan_id?: string | null
           status?: string
           total_amount?: number
           type?: string
@@ -424,7 +332,7 @@ export type Database = {
           created_at?: string
           domain_name?: string | null
           id?: string
-          package_id?: string | null
+          plan_id?: string | null
           status?: string
           total_amount?: number
           type?: string
@@ -433,8 +341,8 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "orders_package_id_fkey"
-            columns: ["package_id"]
+            foreignKeyName: "orders_plan_id_fkey"
+            columns: ["plan_id"]
             isOneToOne: false
             referencedRelation: "hosting_plans"
             referencedColumns: ["id"]
@@ -539,61 +447,23 @@ export type Database = {
           },
         ]
       }
-      transactions: {
-        Row: {
-          amount: number
-          created_at: string
-          id: string
-          invoice_id: string | null
-          method: string
-          reference: string | null
-          user_id: string
-        }
-        Insert: {
-          amount?: number
-          created_at?: string
-          id?: string
-          invoice_id?: string | null
-          method?: string
-          reference?: string | null
-          user_id: string
-        }
-        Update: {
-          amount?: number
-          created_at?: string
-          id?: string
-          invoice_id?: string | null
-          method?: string
-          reference?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "transactions_invoice_id_fkey"
-            columns: ["invoice_id"]
-            isOneToOne: false
-            referencedRelation: "invoices"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       user_roles: {
         Row: {
           created_at: string
           id: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: string
           user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
-          role: Database["public"]["Enums"]["app_role"]
+          role?: string
           user_id: string
         }
         Update: {
           created_at?: string
           id?: string
-          role?: Database["public"]["Enums"]["app_role"]
+          role?: string
           user_id?: string
         }
         Relationships: []
@@ -603,16 +473,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      has_role: {
-        Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
-        }
-        Returns: boolean
-      }
+      has_role: { Args: { _role: string; _user_id: string }; Returns: boolean }
     }
     Enums: {
-      app_role: "admin" | "moderator" | "user"
+      [_ in never]: never
     }
     CompositeTypes: {
       [_ in never]: never
@@ -739,8 +603,6 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {
-      app_role: ["admin", "moderator", "user"],
-    },
+    Enums: {},
   },
 } as const
