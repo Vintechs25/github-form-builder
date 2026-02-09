@@ -45,7 +45,14 @@ export async function callVpsApi(action: VpsAction, params: Record<string, unkno
   const { data, error } = await supabase.functions.invoke("vps-api", {
     body: { action, ...params },
   });
-  if (error) throw new Error(error.message || "API call failed");
+  if (error) {
+    // Try to extract a meaningful message from the response
+    const msg = (data as any)?.error || error.message || "API call failed";
+    throw new Error(msg);
+  }
+  if (data && data.error) {
+    throw new Error(data.error);
+  }
   return data;
 }
 
