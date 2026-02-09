@@ -458,20 +458,20 @@ serve(async (req) => {
             bytes[i] = binaryStr.charCodeAt(i);
           }
           
-          const formData = new FormData();
-          formData.append("myfile", new Blob([bytes]), fileName);
-          formData.append("completePath", uploadPath);
-          formData.append("domainName", params.domain as string);
+          const csrfMatch2 = sessionCookie.match(/csrftoken=([^;]+)/);
+          const csrfToken2 = csrfMatch2 ? csrfMatch2[1] : "";
           
-          const csrfMatch = sessionCookie.match(/csrftoken=([^;]+)/);
-          const csrfToken = csrfMatch ? csrfMatch[1] : "";
+          const formData = new FormData();
+          formData.append("file", new Blob([bytes]), fileName);
+          formData.append("completePath", `${uploadPath}/${fileName}`);
+          formData.append("csrfmiddlewaretoken", csrfToken2);
           
           console.log(`[vps-api] Upload file: ${fileName} → ${uploadPath}`);
           const uploadRes = await fetch(`${baseUrl}${path}`, {
             method: "POST",
             headers: {
               "Cookie": sessionCookie,
-              "X-CSRFToken": csrfToken,
+              "X-CSRFToken": csrfToken2,
               "Referer": `${baseUrl}/`,
             },
             body: formData,
