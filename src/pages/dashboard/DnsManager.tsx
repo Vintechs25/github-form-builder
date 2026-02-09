@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Plus, Trash2, ArrowLeft, Loader2 } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +20,20 @@ interface DnsRecord {
   host: string;
   value: string;
   ttl: number;
+  source?: "local" | "server";
+  serverId?: string; // CyberPanel record ID for deletion
 }
+
+// Map CyberPanel selection keys to standard record types
+const RECORD_TYPE_MAP: Record<string, string> = {
+  aRecord: "A",
+  aaaaRecord: "AAAA",
+  cnameRecord: "CNAME",
+  mxRecord: "MX",
+  txtRecord: "TXT",
+  nsRecord: "NS",
+  srvRecord: "SRV",
+};
 
 const DnsManager = () => {
   const { id } = useParams<{ id: string }>();
@@ -29,6 +42,7 @@ const DnsManager = () => {
   const [domain, setDomain] = useState<any>(null);
   const [records, setRecords] = useState<DnsRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -38,6 +52,93 @@ const DnsManager = () => {
   const [newHost, setNewHost] = useState("");
   const [newValue, setNewValue] = useState("");
   const [newTtl, setNewTtl] = useState("3600");
+
+  // Fetch DNS records from CyberPanel for all record types
+  const syncFromServer = useCallback(async (domainName: string) => {
+    const serverRecords: DnsRecord[] = [];
+
+    const fetchPromises = Object.entries(RECORD_TYPE_MAP).map(async ([selectionKey, type]) => {
+      try {
+        const { data, error } = await supabase.functions.invoke("vps-api", {
+          body: {
+            action: "list-dns-records",
+            domain: domainName,
+            recordType: selectionKey,
+          },
+        });
+        if (error) return;
+
+        // CyberPanel returns records in data.records or similar structure
+        const rawRecords = data?.data?.records || data?.records || [];
+        if (Array.isArray(rawRecords)) {
+          for (const rec of rawRecords) {
+            serverRecords.push({
+              id: `server-${rec.id || crypto.randomUUID()}`,
+              record_type: type,
+              host: rec.name || rec.recordName || "@",
+              value: rec.content || rec.recordContent || rec.address || "",
+              ttl: parseInt(rec.ttl) || 3600,
+              source: "server",
+              serverId: String(rec.id || ""),
+            });
+          }
+        }
+      } catch {
+        // Silently skip failed type fetches
+      }
+    });
+
+    await Promise.all(fetchPromises);
+    return serverRecords;
+  }, []);
+
+  const loadRecords = useCallback(async (domainData?: any) => {
+    if (!user || !id) return;
+    const dom = domainData || domain;
+    if (!dom) return;
+
+    setLoading(true);
+
+    // Load local DNS records
+    const { data: localData } = await supabase
+      .from("dns_records")
+      .select("*")
+      .eq("domain_id", id)
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: true });
+
+    const localRecords: DnsRecord[] = (localData || []).map((r) => ({
+      ...r,
+      source: "local" as const,
+    }));
+
+    // Sync from server
+    let serverRecords: DnsRecord[] = [];
+    try {
+      serverRecords = await syncFromServer(dom.domain_name);
+    } catch {
+      // Server sync failed, show local only
+    }
+
+    // Merge: show server records, mark local ones that also exist on server
+    const merged: DnsRecord[] = [...serverRecords];
+
+    // Add local-only records (not on server)
+    for (const local of localRecords) {
+      const existsOnServer = serverRecords.some(
+        (s) =>
+          s.record_type === local.record_type &&
+          s.host === local.host &&
+          s.value === local.value
+      );
+      if (!existsOnServer) {
+        merged.push(local);
+      }
+    }
+
+    setRecords(merged);
+    setLoading(false);
+  }, [user, id, domain, syncFromServer]);
 
   useEffect(() => {
     if (!user || !id) return;
@@ -55,25 +156,24 @@ const DnsManager = () => {
         return;
       }
       setDomain(dom);
-
-      // Load local DNS records
-      const { data: dnsData } = await supabase
-        .from("dns_records")
-        .select("*")
-        .eq("domain_id", id)
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: true });
-
-      setRecords(dnsData || []);
-      setLoading(false);
+      await loadRecords(dom);
     };
     load();
   }, [user, id]);
+
+  const handleSync = async () => {
+    if (!domain) return;
+    setSyncing(true);
+    await loadRecords();
+    toast.success("DNS records synced from server");
+    setSyncing(false);
+  };
 
   const handleCreate = async () => {
     if (!user || !id || !newValue.trim()) return;
     setCreating(true);
     try {
+      // Save locally
       const { error } = await supabase.from("dns_records").insert({
         domain_id: id,
         user_id: user.id,
@@ -82,10 +182,9 @@ const DnsManager = () => {
         value: newValue.trim(),
         ttl: parseInt(newTtl) || 3600,
       });
-
       if (error) throw error;
 
-      // If domain is on NameSilo, sync the record
+      // If domain is on NameSilo, sync to NameSilo
       if (domain?.registrar === "namesilo") {
         await supabase.functions.invoke("namesilo-api", {
           body: {
@@ -99,19 +198,27 @@ const DnsManager = () => {
         });
       }
 
+      // Also add to CyberPanel DNS zone
+      try {
+        await supabase.functions.invoke("vps-api", {
+          body: {
+            action: "add-dns-record",
+            domain: domain.domain_name,
+            recordType: newType,
+            recordName: newHost.trim() || "@",
+            value: newValue.trim(),
+            ttl: parseInt(newTtl) || 3600,
+          },
+        });
+      } catch {
+        // Non-critical if CyberPanel sync fails
+      }
+
       toast.success("DNS record added!");
       setNewHost("");
       setNewValue("");
       setDialogOpen(false);
-
-      // Refresh
-      const { data } = await supabase
-        .from("dns_records")
-        .select("*")
-        .eq("domain_id", id)
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: true });
-      setRecords(data || []);
+      await loadRecords();
     } catch (err: any) {
       toast.error(err.message || "Failed to add record");
     }
@@ -122,9 +229,21 @@ const DnsManager = () => {
     if (!user || !id) return;
     setDeleting(record.id);
     try {
-      await supabase.from("dns_records").delete().eq("id", record.id).eq("user_id", user.id);
-      setRecords((prev) => prev.filter((r) => r.id !== record.id));
-      toast.success("Record deleted");
+      if (record.source === "server" && record.serverId) {
+        // Delete from CyberPanel
+        await supabase.functions.invoke("vps-api", {
+          body: {
+            action: "delete-dns-record",
+            recordId: record.serverId,
+          },
+        });
+        toast.success("Record deleted from server");
+      } else {
+        // Delete local record
+        await supabase.from("dns_records").delete().eq("id", record.id).eq("user_id", user.id);
+        toast.success("Record deleted");
+      }
+      await loadRecords();
     } catch {
       toast.error("Failed to delete record");
     }
@@ -132,7 +251,7 @@ const DnsManager = () => {
   };
 
   if (loading) {
-    return <div className="text-center py-12 text-muted-foreground">Loading...</div>;
+    return <div className="text-center py-12 text-muted-foreground">Loading DNS records...</div>;
   }
 
   return (
@@ -147,7 +266,10 @@ const DnsManager = () => {
         </div>
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
+          <RefreshCw className={`w-4 h-4 mr-1 ${syncing ? "animate-spin" : ""}`} /> Sync
+        </Button>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button variant="accent" size="sm">
@@ -215,6 +337,7 @@ const DnsManager = () => {
                 <TableHead>Host</TableHead>
                 <TableHead>Value</TableHead>
                 <TableHead>TTL</TableHead>
+                <TableHead>Source</TableHead>
                 <TableHead className="w-16"></TableHead>
               </TableRow>
             </TableHeader>
@@ -229,6 +352,15 @@ const DnsManager = () => {
                   <TableCell className="font-mono text-sm">{r.host}</TableCell>
                   <TableCell className="font-mono text-sm max-w-[200px] truncate">{r.value}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{r.ttl}s</TableCell>
+                  <TableCell>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      r.source === "server"
+                        ? "bg-primary/10 text-primary"
+                        : "bg-muted text-muted-foreground"
+                    }`}>
+                      {r.source === "server" ? "Server" : "Local"}
+                    </span>
+                  </TableCell>
                   <TableCell>
                     <Button
                       variant="ghost"
