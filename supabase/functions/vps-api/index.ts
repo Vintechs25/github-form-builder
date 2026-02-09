@@ -18,11 +18,6 @@ const OFFICIAL_API: Record<string, string> = {
   "list-packages": "listPackage",
   "change-package": "changePackageAPI",
   "get-user-info": "getUserInfo",
-  // Email operations (official API, no session needed)
-  "list-emails": "getEmailAccounts",
-  "create-email": "createEmailAccount",
-  "delete-email": "deleteEmailAccount",
-  "change-email-password": "changeEmailPassword",
 };
 
 // Session-based endpoints (need login cookie first)
@@ -31,6 +26,11 @@ const SESSION_API: Record<string, string> = {
   "list-databases": "/dataBases/fetchDatabases",
   "create-database": "/dataBases/submitDBCreation",
   "delete-database": "/dataBases/submitDatabaseDeletion",
+  // Email operations (session-based, not in /api/)
+  "list-emails": "/email/fetchEmails",
+  "create-email": "/email/submitEmailCreation",
+  "delete-email": "/email/submitEmailDeletion",
+  "change-email-password": "/email/changePassword",
   // DNS operations
   "create-dns-zone": "/dns/zoneCreation",
   "add-dns-record": "/dns/addDNSRecord",
@@ -288,23 +288,6 @@ serve(async (req) => {
         case "get-user-info":
           bodyParams.username = params.username;
           break;
-        case "list-emails":
-          bodyParams.domain = params.domain;
-          break;
-        case "create-email":
-          bodyParams.domain = params.domain;
-          bodyParams.email = params.email;
-          bodyParams.password = params.password;
-          break;
-        case "delete-email":
-          bodyParams.domain = params.domain;
-          bodyParams.email = params.email;
-          break;
-        case "change-email-password":
-          bodyParams.domain = params.domain;
-          bodyParams.email = params.email;
-          bodyParams.password = params.password;
-          break;
         default:
           Object.assign(bodyParams, params);
       }
@@ -340,6 +323,23 @@ serve(async (req) => {
           break;
         case "delete-database":
           bodyParams.dbName = params.dbName;
+          break;
+        // Email operations
+        case "list-emails":
+          bodyParams.selectedDomain = params.domain;
+          break;
+        case "create-email":
+          bodyParams.selectedDomain = params.domain;
+          bodyParams.domain = params.domain;
+          bodyParams.username = params.email;
+          bodyParams.passwordByPass = params.password;
+          break;
+        case "delete-email":
+          bodyParams.email = params.email;
+          break;
+        case "change-email-password":
+          bodyParams.email = params.email;
+          bodyParams.password = params.password;
           break;
         case "create-dns-zone":
           bodyParams.zoneDomain = params.domain;
