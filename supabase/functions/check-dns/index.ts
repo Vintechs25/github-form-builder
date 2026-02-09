@@ -154,25 +154,30 @@ serve(async (req) => {
               }
 
               // Update hosting account to active
-              await serviceClient
+              const { error: updateErr } = await serviceClient
                 .from("hosting_accounts")
                 .update({
                   status: "active",
                   ssl_enabled: true,
-                  cpanel_username: (vpsData.username as string) || null,
                 })
                 .eq("id", hosting_account_id);
+              
+              if (updateErr) {
+                console.error(`[check-dns] Failed to update hosting account:`, updateErr);
+              } else {
+                console.log(`[check-dns] Hosting account ${hosting_account_id} updated to active`);
+              }
 
-              // Update related domain
-              await serviceClient
+              // Update related domain status
+              const { error: domErr } = await serviceClient
                 .from("domains")
-                .update({
-                  nameserver_1: REQUIRED_NS[0],
-                  nameserver_2: REQUIRED_NS[1],
-                  status: "active",
-                })
+                .update({ status: "active" })
                 .eq("domain_name", domain)
                 .eq("user_id", userId);
+              
+              if (domErr) {
+                console.error(`[check-dns] Failed to update domain:`, domErr);
+              }
 
               result.provisioned = true;
               result.hosting_status = "active";
