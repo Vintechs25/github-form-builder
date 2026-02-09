@@ -57,7 +57,7 @@ const ALL_ACTIONS = [...Object.keys(OFFICIAL_API), ...Object.keys(SESSION_API)];
 
 // ─── Helper: Get CyberPanel base URL ───────────────────────────────────────
 function getCyberPanelUrl(): string {
-  let url = Deno.env.get("VPS_API_URL") || "https://panel.vintechdev.store:8090";
+  let url = Deno.env.get("VPS_API_URL") || "https://panel.vintechcyber.com:8090";
   if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
   url = url.replace(/\/+$/, "");
   // Remove /api suffix if present (we'll add specific paths)
@@ -492,9 +492,10 @@ serve(async (req) => {
     console.log(`[vps-api] Response for ${action}: status=${result.status}`, result.data);
 
     if (!result.ok && result.status >= 400) {
-      const isMailAction = ["list-emails", "create-email", "delete-email", "change-email-password"].includes(action);
-      const errorMsg = (isMailAction && result.status === 404)
-        ? "Mail server is not installed or enabled on this server"
+      const errorMsg = typeof result.data?.error_message === "string"
+        ? result.data.error_message
+        : typeof result.data?.raw === "string" && result.data.raw.includes("Not Found")
+        ? `Endpoint not found for action "${action}" — CyberPanel may not support this API`
         : "Server request failed";
       return new Response(
         JSON.stringify({ error: errorMsg, status: result.status, details: result.data }),
