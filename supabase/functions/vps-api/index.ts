@@ -83,8 +83,48 @@ function extractCookies(res: Response): string[] {
 // ─── Helper: Login to CyberPanel to get session + CSRF ─────────────────────
 async function getCyberPanelSession(baseUrl: string, user: string, pass: string): Promise<string | null> {
   try {
-    // Use loginAPI directly (avoids SSL issues with the root page CSRF flow)
-    console.log(`[vps-api] Logging in via loginAPI...`);
+    const cookieMap = new Map<string, string>();
+
+    // Step 1: GET login page to obtain csrftoken cookie
+    console.log(`[vps-api] Step 1: GET login page for CSRF cookie...`);
+    const pageRes = await fetch(`${baseUrl}/`, { method: "GET", redirect: "manual" });
+    const pageCookies = extractCookies(pageRes);
+    await pageRes.text(); // consume body
+    for (const c of pageCookies) { const [n] = c.split("="); cookieMap.set(n, c); }
+    console.log(`[vps-api] Page cookies: ${pageCookies.join("; ")}`);
+
+    let csrfToken = "";
+    const csrfCookie = pageCookies.find(c => c.startsWith("csrftoken="));
+    if (csrfCookie) csrfToken = csrfCookie.split("=")[1];
+
+    // Step 2: POST verifyLogin with CSRF token
+    console.log(`[vps-api] Step 2: POST verifyLogin (csrf=${csrfToken ? csrfToken.substring(0, 10) + "..." : "none"})...`);
+    const loginRes = await fetch(`${baseUrl}/verifyLogin`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Cookie": [...cookieMap.values()].join("; "),
+        "X-CSRFToken": csrfToken,
+        "Referer": `${baseUrl}/`,
+      },
+      body: new URLSearchParams({
+        username: user,
+        password: pass,
+        csrfmiddlewaretoken: csrfToken,
+        languageSelection: "english",
+      }).toString(),
+      redirect: "manual",
+    });
+    const loginCookies = extractCookies(loginRes);
+    await loginRes.text(); // consume body
+    for (const c of loginCookies) { const [n] = c.split("="); cookieMap.set(n, c); }
+    console.log(`[vps-api] verifyLogin status: ${loginRes.status}, cookies: ${loginCookies.join("; ")}`);
+
+    const cookieString = [...cookieMap.values()].join("; ");
+    if (cookieString.includes("sessionid=")) return cookieString;
+
+    // Fallback: try loginAPI
+    console.log(`[vps-api] No sessionid, fallback to loginAPI...`);
     const apiRes = await fetch(`${baseUrl}/api/loginAPI`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -92,17 +132,11 @@ async function getCyberPanelSession(baseUrl: string, user: string, pass: string)
       redirect: "manual",
     });
     const apiCookies = extractCookies(apiRes);
-    const apiBody = await apiRes.text();
-    console.log(`[vps-api] loginAPI status: ${apiRes.status}, cookies: ${apiCookies.join("; ")}`);
-    console.log(`[vps-api] loginAPI body: ${apiBody.substring(0, 200)}`);
+    await apiRes.text();
+    for (const c of apiCookies) { const [n] = c.split("="); cookieMap.set(n, c); }
 
-    const cookieMap = new Map<string, string>();
-    for (const c of apiCookies) {
-      const [name] = c.split("=");
-      cookieMap.set(name, c);
-    }
-    const cookieString = [...cookieMap.values()].join("; ");
-    return cookieString.includes("sessionid=") ? cookieString : null;
+    const finalCookies = [...cookieMap.values()].join("; ");
+    return finalCookies.includes("sessionid=") ? finalCookies : null;
   } catch (err) {
     console.error(`[vps-api] Login error:`, err);
     return null;
