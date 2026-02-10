@@ -21,6 +21,8 @@ const OFFICIAL_API: Record<string, string> = {
 
 // Session-based endpoints (need login cookie first)
 const SESSION_API: Record<string, string> = {
+  // SSL
+  "issue-ssl": "/manageSSL/issueSSL",
   // Database operations
   "list-databases": "/dataBases/fetchDatabases",
   "create-database": "/dataBases/submitDBCreation",
