@@ -308,26 +308,36 @@ const Databases = () => {
             </>
           )}
 
-          {/* phpMyAdmin link */}
-          <div className="bg-card rounded-xl border border-border p-5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
-                  <ExternalLink className="w-5 h-5 text-accent" />
-                </div>
-                <div>
-                  <h3 className="font-semibold">phpMyAdmin</h3>
-                  <p className="text-sm text-muted-foreground">Advanced database management interface</p>
-                </div>
+          {/* phpMyAdmin login */}
+          <div className="bg-card rounded-xl border border-border p-5 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+                <ExternalLink className="w-5 h-5 text-accent" />
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => window.open(PHPMYADMIN_URL, "_blank")}
-              >
+              <div>
+                <h3 className="font-semibold">phpMyAdmin</h3>
+                <p className="text-sm text-muted-foreground">Enter your database credentials to open phpMyAdmin</p>
+              </div>
+            </div>
+            <form
+              action={PHPMYADMIN_URL}
+              method="POST"
+              target="_blank"
+              className="flex items-end gap-3"
+            >
+              <input type="hidden" name="server" value="1" />
+              <div className="space-y-1 flex-1">
+                <Label className="text-xs">Username</Label>
+                <Input name="pma_username" placeholder="db_user" className="h-9" />
+              </div>
+              <div className="space-y-1 flex-1">
+                <Label className="text-xs">Password</Label>
+                <Input name="pma_password" type="password" placeholder="••••••••" className="h-9" />
+              </div>
+              <Button variant="outline" size="sm" type="submit">
                 <ExternalLink className="w-4 h-4 mr-1" /> Open phpMyAdmin
               </Button>
-            </div>
+            </form>
           </div>
         </>
       )}
