@@ -277,10 +277,7 @@ serve(async (req) => {
           break;
         case "website-status":
           bodyParams.websiteName = params.domain;
-          bodyParams.state = params.state; // "Suspend" or "Activate"
-          break;
-        case "issue-ssl":
-          bodyParams.domainName = params.domain;
+          bodyParams.state = params.state;
           break;
         case "change-package":
           bodyParams.websiteName = params.domain;
