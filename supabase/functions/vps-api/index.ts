@@ -312,6 +312,9 @@ serve(async (req) => {
         case "list-databases":
           bodyParams.databaseWebsite = params.domain;
           break;
+        case "issue-ssl":
+          bodyParams.virtualHost = params.domain;
+          break;
         case "create-database":
           bodyParams.databaseWebsite = params.domain;
           bodyParams.dbName = params.dbName;
