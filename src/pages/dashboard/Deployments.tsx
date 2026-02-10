@@ -531,7 +531,7 @@ const Deployments = () => {
           </DialogHeader>
           <div className="bg-background border border-border text-foreground rounded-lg p-4 font-mono text-xs overflow-auto max-h-[60vh] whitespace-pre-wrap">
             {logsLoading ? (
-              <div className="flex items-center gap-2 text-zinc-400">
+              <div className="flex items-center gap-2 text-muted-foreground">
                 <Loader2 className="w-4 h-4 animate-spin" /> Loading logs…
               </div>
             ) : (
