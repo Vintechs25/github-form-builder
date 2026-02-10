@@ -56,7 +56,7 @@ export interface CreateAppParams {
 }
 
 export async function createApp(params: CreateAppParams) {
-  return callCoolifyApi("create-app", params as Record<string, unknown>);
+  return callCoolifyApi("create-app", params as unknown as Record<string, unknown>);
 }
 
 export async function deployApp(appId: string) {

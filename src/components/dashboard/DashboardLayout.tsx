@@ -22,6 +22,7 @@ const navItems = [
   { icon: Upload, label: "File Manager", path: "/dashboard/files" },
   { icon: Mail, label: "Email", path: "/dashboard/email" },
   { icon: Shield, label: "SSL / Security", path: "/dashboard/security" },
+  { icon: Rocket, label: "Deployments", path: "/dashboard/deployments" },
   { icon: Archive, label: "Backups", path: "/dashboard/backups" },
   { icon: ShoppingBag, label: "Orders", path: "/dashboard/orders" },
   { icon: CreditCard, label: "Billing", path: "/dashboard/billing" },
