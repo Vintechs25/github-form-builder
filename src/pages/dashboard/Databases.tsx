@@ -323,7 +323,7 @@ const Databases = () => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => window.open(`https://${PANEL_HOST}:8090/dataBases/phpMyAdmin`, "_blank")}
+                onClick={() => window.open(PHPMYADMIN_URL, "_blank")}
               >
                 <ExternalLink className="w-4 h-4 mr-1" /> Open phpMyAdmin
               </Button>
