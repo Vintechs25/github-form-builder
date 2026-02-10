@@ -37,8 +37,7 @@ const Databases = () => {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newDb, setNewDb] = useState({ name: "", username: "", password: "" });
-  // Panel URL for phpMyAdmin
-  const PANEL_HOST = "panel.vintechcyber.com";
+  const PHPMYADMIN_URL = "https://db.vintechcyber.com";
 
   useEffect(() => {
     if (!user) return;
