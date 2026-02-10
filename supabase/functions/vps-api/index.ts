@@ -14,7 +14,6 @@ const OFFICIAL_API: Record<string, string> = {
   "create-website": "createWebsite",
   "delete-website": "deleteWebsite",
   "website-status": "submitWebsiteStatus",
-  "issue-ssl": "issueSSL",
   "list-packages": "listPackage",
   "change-package": "changePackageAPI",
   "get-user-info": "getUserInfo",
@@ -22,6 +21,8 @@ const OFFICIAL_API: Record<string, string> = {
 
 // Session-based endpoints (need login cookie first)
 const SESSION_API: Record<string, string> = {
+  // SSL
+  "issue-ssl": "/manageSSL/issueSSL",
   // Database operations
   "list-databases": "/dataBases/fetchDatabases",
   "create-database": "/dataBases/submitDBCreation",
@@ -276,10 +277,7 @@ serve(async (req) => {
           break;
         case "website-status":
           bodyParams.websiteName = params.domain;
-          bodyParams.state = params.state; // "Suspend" or "Activate"
-          break;
-        case "issue-ssl":
-          bodyParams.domainName = params.domain;
+          bodyParams.state = params.state;
           break;
         case "change-package":
           bodyParams.websiteName = params.domain;
@@ -313,6 +311,9 @@ serve(async (req) => {
       switch (action) {
         case "list-databases":
           bodyParams.databaseWebsite = params.domain;
+          break;
+        case "issue-ssl":
+          bodyParams.virtualHost = params.domain;
           break;
         case "create-database":
           bodyParams.databaseWebsite = params.domain;
