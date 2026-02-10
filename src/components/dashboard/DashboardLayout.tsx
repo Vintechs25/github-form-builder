@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, Outlet } from "react-router-dom";
 import {
   Server, Globe, Database, Upload, Mail, Shield, Settings, LogOut,
   Menu, X, Home, CreditCard, HelpCircle, LayoutGrid, Loader2,
-  ShoppingBag, Search, Package, ShieldCheck, Archive,
+  ShoppingBag, Search, Package, ShieldCheck, Archive, Rocket,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
