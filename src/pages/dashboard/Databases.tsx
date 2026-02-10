@@ -37,8 +37,7 @@ const Databases = () => {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newDb, setNewDb] = useState({ name: "", username: "", password: "" });
-  // Panel URL for phpMyAdmin
-  const PANEL_HOST = "panel.vintechcyber.com";
+  const PHPMYADMIN_URL = "https://db.vintechcyber.com";
 
   useEffect(() => {
     if (!user) return;
@@ -324,7 +323,7 @@ const Databases = () => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => window.open(`https://${PANEL_HOST}:8090/dataBases/phpMyAdmin`, "_blank")}
+                onClick={() => window.open(PHPMYADMIN_URL, "_blank")}
               >
                 <ExternalLink className="w-4 h-4 mr-1" /> Open phpMyAdmin
               </Button>
