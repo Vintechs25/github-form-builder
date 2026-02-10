@@ -529,7 +529,7 @@ const Deployments = () => {
               <Terminal className="w-5 h-5" /> Build Logs
             </DialogTitle>
           </DialogHeader>
-          <div className="bg-zinc-950 text-zinc-200 rounded-lg p-4 font-mono text-xs overflow-auto max-h-[60vh] whitespace-pre-wrap">
+          <div className="bg-background border border-border text-foreground rounded-lg p-4 font-mono text-xs overflow-auto max-h-[60vh] whitespace-pre-wrap">
             {logsLoading ? (
               <div className="flex items-center gap-2 text-zinc-400">
                 <Loader2 className="w-4 h-4 animate-spin" /> Loading logs…
