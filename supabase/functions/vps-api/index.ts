@@ -14,7 +14,6 @@ const OFFICIAL_API: Record<string, string> = {
   "create-website": "createWebsite",
   "delete-website": "deleteWebsite",
   "website-status": "submitWebsiteStatus",
-  "issue-ssl": "issueSSL",
   "list-packages": "listPackage",
   "change-package": "changePackageAPI",
   "get-user-info": "getUserInfo",
