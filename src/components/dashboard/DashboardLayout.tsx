@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, Outlet } from "react-router-dom";
 import {
   Server, Globe, Database, Upload, Mail, Shield, Settings, LogOut,
   Menu, X, Home, CreditCard, HelpCircle, LayoutGrid, Loader2,
-  ShoppingBag, Search, Package, ShieldCheck, Archive,
+  ShoppingBag, Search, Package, ShieldCheck, Archive, Rocket,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -22,6 +22,7 @@ const navItems = [
   { icon: Upload, label: "File Manager", path: "/dashboard/files" },
   { icon: Mail, label: "Email", path: "/dashboard/email" },
   { icon: Shield, label: "SSL / Security", path: "/dashboard/security" },
+  { icon: Rocket, label: "Deployments", path: "/dashboard/deployments" },
   { icon: Archive, label: "Backups", path: "/dashboard/backups" },
   { icon: ShoppingBag, label: "Orders", path: "/dashboard/orders" },
   { icon: CreditCard, label: "Billing", path: "/dashboard/billing" },

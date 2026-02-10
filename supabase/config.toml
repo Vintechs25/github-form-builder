@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.check-expiring]
 verify_jwt = false
+
+[functions.coolify-api]
+verify_jwt = false
