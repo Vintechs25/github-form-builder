@@ -122,6 +122,7 @@ const Deployments = () => {
     try {
       await coolify.createApp({
         projectId: selectedProject,
+        name: repoUrl.trim().split("/").pop()?.replace(".git", "") || "app",
         repoUrl: repoUrl.trim(),
         branch: branch || "main",
         domain: domain.trim() || undefined,
