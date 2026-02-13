@@ -218,11 +218,18 @@ async function getAppStatus(token: string, params: any) {
 }
 
 async function getLogs(token: string, params: any) {
-  const data = await coolifyFetch(
-    token,
-    `/applications/${params.appId}/logs?since=${params.since || 600}`
-  );
-  return json(data);
+  try {
+    const data = await coolifyFetch(
+      token,
+      `/applications/${params.appId}/logs?since=${params.since || 600}`
+    );
+    return json(data);
+  } catch (e: any) {
+    if (e.message?.includes("not running")) {
+      return json({ logs: [], message: "Application is not running yet." });
+    }
+    throw e;
+  }
 }
 
 async function listApps(token: string, params: any) {
