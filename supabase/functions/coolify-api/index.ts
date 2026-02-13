@@ -65,8 +65,6 @@ Deno.serve(async (req) => {
         return await getApp(COOLIFY_TOKEN, params);
       case "list-servers":
         return await listServers(COOLIFY_TOKEN);
-      case "list-destinations":
-        return await listDestinations(COOLIFY_TOKEN);
       default:
         return json({ error: `Unknown action: ${action}` }, 400);
     }
@@ -137,34 +135,24 @@ async function listProjects(token: string) {
 }
 
 async function createApp(token: string, params: any) {
-  // Auto-fetch server_id if not provided
-  let serverId = params.serverId;
-  if (!serverId) {
+  // Auto-fetch server_uuid if not provided
+  let serverUuid = params.serverUuid;
+  if (!serverUuid) {
     const servers = await coolifyFetch(token, "/servers") as any[];
     if (!servers || servers.length === 0) {
       throw new Error("No servers available in Coolify");
     }
-    serverId = servers[0].id;
-  }
-
-  // Auto-fetch destination_id if not provided
-  let destinationId = params.destinationId;
-  if (!destinationId) {
-    const destinations = await coolifyFetch(token, "/destinations") as any[];
-    if (!destinations || destinations.length === 0) {
-      throw new Error("No destinations available in Coolify");
-    }
-    destinationId = destinations[0].id;
+    serverUuid = servers[0].uuid;
   }
 
   const payload: any = {
-    name: params.name || "app",
-    repository: params.repoUrl,
-    branch: params.branch || "main",
-    build_pack: params.buildPack || "node",
-    project_id: params.projectId,
-    server_id: serverId,
-    destination_id: destinationId,
+    project_uuid: params.projectId,
+    server_uuid: serverUuid,
+    environment_name: params.environment || "production",
+    git_repository: params.repoUrl,
+    git_branch: params.branch || "main",
+    build_pack: params.buildPack || "nixpacks",
+    ports_exposes: params.portsExposes || "3000",
   };
 
   if (params.domain) {
@@ -172,17 +160,12 @@ async function createApp(token: string, params: any) {
   }
 
   console.log("Creating app with payload:", JSON.stringify(payload));
-  const data = await coolifyFetch(token, "/applications", "POST", payload);
+  const data = await coolifyFetch(token, "/applications/public", "POST", payload);
   return json(data);
 }
 
 async function listServers(token: string) {
   const data = await coolifyFetch(token, "/servers");
-  return json(data);
-}
-
-async function listDestinations(token: string) {
-  const data = await coolifyFetch(token, "/destinations");
   return json(data);
 }
 
