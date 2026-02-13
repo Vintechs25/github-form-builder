@@ -11,7 +11,8 @@ type CoolifyAction =
   | "get-app-status"
   | "get-logs"
   | "list-apps"
-  | "get-app";
+  | "get-app"
+  | "list-servers";
 
 async function callCoolifyApi(action: CoolifyAction, params: Record<string, unknown> = {}) {
   const { data, error } = await supabase.functions.invoke("coolify-api", {
@@ -89,4 +90,8 @@ export async function listApps() {
 
 export async function getApp(appId: string) {
   return callCoolifyApi("get-app", { appId });
+}
+
+export async function listServers() {
+  return callCoolifyApi("list-servers");
 }

@@ -63,6 +63,8 @@ Deno.serve(async (req) => {
         return await listApps(COOLIFY_TOKEN, params);
       case "get-app":
         return await getApp(COOLIFY_TOKEN, params);
+      case "list-servers":
+        return await listServers(COOLIFY_TOKEN);
       default:
         return json({ error: `Unknown action: ${action}` }, 400);
     }
@@ -107,11 +109,11 @@ async function coolifyFetch(
   }
 
   if (!res.ok) {
-    throw new Error(
-      typeof parsed === "object" && parsed !== null && "message" in parsed
-        ? (parsed as any).message
-        : `Coolify API error ${res.status}: ${text.slice(0, 300)}`
-    );
+    console.error("Coolify API error response:", text.slice(0, 1000));
+    const msg = typeof parsed === "object" && parsed !== null && "message" in parsed
+      ? (parsed as any).message
+      : `Coolify API error ${res.status}: ${text.slice(0, 500)}`;
+    throw new Error(msg);
   }
 
   return parsed;
@@ -133,23 +135,36 @@ async function listProjects(token: string) {
 }
 
 async function createApp(token: string, params: any) {
-  // Create a public application from a git repository
+  // If no server_uuid provided, auto-detect the first available server
+  let serverUuid = params.serverUuid;
+  if (!serverUuid) {
+    const servers = await coolifyFetch(token, "/servers") as any[];
+    if (!servers || servers.length === 0) {
+      throw new Error("No servers available in Coolify");
+    }
+    serverUuid = servers[0].uuid;
+  }
+
   const payload: any = {
     project_uuid: params.projectId,
-    server_uuid: params.serverUuid || undefined,
+    server_uuid: serverUuid,
     environment_name: params.environment || "production",
     git_repository: params.repoUrl,
     git_branch: params.branch || "main",
     build_pack: params.buildPack || "nixpacks",
-    type: "public",
   };
 
-  // Set domains if provided
   if (params.domain) {
     payload.domains = params.domain;
   }
 
+  console.log("Creating app with payload:", JSON.stringify(payload));
   const data = await coolifyFetch(token, "/applications/public", "POST", payload);
+  return json(data);
+}
+
+async function listServers(token: string) {
+  const data = await coolifyFetch(token, "/servers");
   return json(data);
 }
 
