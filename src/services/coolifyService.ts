@@ -12,7 +12,8 @@ type CoolifyAction =
   | "get-logs"
   | "list-apps"
   | "get-app"
-  | "list-servers";
+  | "list-servers"
+  | "list-destinations";
 
 async function callCoolifyApi(action: CoolifyAction, params: Record<string, unknown> = {}) {
   const { data, error } = await supabase.functions.invoke("coolify-api", {
@@ -48,12 +49,13 @@ export async function listProjects() {
 // ─── Applications ───────────────────────────────────────────────────────────
 export interface CreateAppParams {
   projectId: string;
+  name: string;
   repoUrl: string;
   branch: string;
   domain?: string;
   buildPack?: string;
-  serverUuid?: string;
-  environment?: string;
+  serverId?: number;
+  destinationId?: number;
 }
 
 export async function createApp(params: CreateAppParams) {
