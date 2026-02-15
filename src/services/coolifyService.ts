@@ -4,6 +4,9 @@ type CoolifyAction =
   | "create-project"
   | "list-projects"
   | "create-app"
+  | "list-envs"
+  | "create-env"
+  | "delete-env"
   | "deploy-app"
   | "redeploy-app"
   | "stop-app"
@@ -96,4 +99,17 @@ export async function getApp(appId: string) {
 
 export async function listServers() {
   return callCoolifyApi("list-servers");
+}
+
+// ─── Environment Variables ──────────────────────────────────────────────────
+export async function listEnvs(appId: string) {
+  return callCoolifyApi("list-envs", { appId });
+}
+
+export async function createEnv(appId: string, key: string, value: string) {
+  return callCoolifyApi("create-env", { appId, key, value });
+}
+
+export async function deleteEnv(appId: string, envUuid: string) {
+  return callCoolifyApi("delete-env", { appId, envUuid });
 }

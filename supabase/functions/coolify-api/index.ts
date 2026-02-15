@@ -65,6 +65,12 @@ Deno.serve(async (req) => {
         return await getApp(COOLIFY_TOKEN, params);
       case "list-servers":
         return await listServers(COOLIFY_TOKEN);
+      case "list-envs":
+        return await listEnvs(COOLIFY_TOKEN, params);
+      case "create-env":
+        return await createEnv(COOLIFY_TOKEN, params);
+      case "delete-env":
+        return await deleteEnv(COOLIFY_TOKEN, params);
       default:
         return json({ error: `Unknown action: ${action}` }, 400);
     }
@@ -240,5 +246,30 @@ async function listApps(token: string, params: any) {
 
 async function getApp(token: string, params: any) {
   const data = await coolifyFetch(token, `/applications/${params.appId}`);
+  return json(data);
+}
+
+// ─── Environment Variables ──────────────────────────────────────────────────
+
+async function listEnvs(token: string, params: any) {
+  const data = await coolifyFetch(token, `/applications/${params.appId}/envs`);
+  return json(data);
+}
+
+async function createEnv(token: string, params: any) {
+  const data = await coolifyFetch(token, `/applications/${params.appId}/envs`, "POST", {
+    key: params.key,
+    value: params.value,
+    is_preview: false,
+  });
+  return json(data);
+}
+
+async function deleteEnv(token: string, params: any) {
+  const data = await coolifyFetch(
+    token,
+    `/applications/${params.appId}/envs/${params.envUuid}`,
+    "DELETE"
+  );
   return json(data);
 }
