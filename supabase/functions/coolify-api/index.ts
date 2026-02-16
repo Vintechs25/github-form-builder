@@ -281,7 +281,7 @@ async function deleteEnv(token: string, params: any) {
 // ─── Deployments ────────────────────────────────────────────────────────────
 
 async function listDeployments(token: string, params: any) {
-  const data = await coolifyFetch(token, `/applications/${params.appId}/deployments`);
+  const data = await coolifyFetch(token, `/deployments/applications/${params.appId}`);
   return json(data);
 }
 
