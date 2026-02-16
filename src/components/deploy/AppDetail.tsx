@@ -12,6 +12,7 @@ import {
 import { toast } from "sonner";
 import { StatusBadge } from "./StatusBadge";
 import { LogViewer } from "./LogViewer";
+import { BuildLogViewer } from "./BuildLogViewer";
 import { AppEnvVars } from "./AppEnvVars";
 import { AppDomains } from "./AppDomains";
 import { AppSettings } from "./AppSettings";
@@ -144,7 +145,7 @@ export function AppDetail({ app, onBack, onRefresh }: AppDetailProps) {
         </TabsList>
 
         <TabsContent value="deployments" className="mt-6">
-          <div className="space-y-4">
+          <div className="space-y-6">
             {/* Current deployment info */}
             <div className="p-4 bg-muted/30 rounded-lg border border-border space-y-3">
               <div className="flex items-center justify-between">
@@ -184,6 +185,9 @@ export function AppDetail({ app, onBack, onRefresh }: AppDetailProps) {
                 <RefreshCw className="w-3 h-3 mr-1" /> Redeploy
               </Button>
             </div>
+
+            {/* Build log streaming */}
+            <BuildLogViewer appId={app.uuid} />
           </div>
         </TabsContent>
 
