@@ -30,4 +30,15 @@ export interface EnvVar {
   updated_at?: string;
 }
 
+export interface Deployment {
+  id: number;
+  uuid: string;
+  status: string;
+  created_at: string;
+  updated_at?: string;
+  commit_message?: string;
+  commit_sha?: string;
+  [key: string]: unknown;
+}
+
 export type DetailTab = "deployments" | "logs" | "domains" | "envs" | "settings";

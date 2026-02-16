@@ -71,6 +71,10 @@ Deno.serve(async (req) => {
         return await createEnv(COOLIFY_TOKEN, params);
       case "delete-env":
         return await deleteEnv(COOLIFY_TOKEN, params);
+      case "list-deployments":
+        return await listDeployments(COOLIFY_TOKEN, params);
+      case "get-build-logs":
+        return await getBuildLogs(COOLIFY_TOKEN, params);
       default:
         return json({ error: `Unknown action: ${action}` }, 400);
     }
@@ -272,4 +276,26 @@ async function deleteEnv(token: string, params: any) {
     "DELETE"
   );
   return json(data);
+}
+
+// ─── Deployments ────────────────────────────────────────────────────────────
+
+async function listDeployments(token: string, params: any) {
+  const data = await coolifyFetch(token, `/applications/${params.appId}/deployments`);
+  return json(data);
+}
+
+async function getBuildLogs(token: string, params: any) {
+  try {
+    const data = await coolifyFetch(
+      token,
+      `/deployments/${params.deploymentUuid}`
+    );
+    return json(data);
+  } catch (e: any) {
+    if (e.message?.includes("not found") || e.message?.includes("not running")) {
+      return json({ logs: "", status: "unknown", message: "Build logs not available yet." });
+    }
+    throw e;
+  }
 }

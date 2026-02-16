@@ -13,6 +13,8 @@ type CoolifyAction =
   | "delete-app"
   | "get-app-status"
   | "get-logs"
+  | "get-build-logs"
+  | "list-deployments"
   | "list-apps"
   | "get-app"
   | "list-servers";
@@ -112,4 +114,13 @@ export async function createEnv(appId: string, key: string, value: string) {
 
 export async function deleteEnv(appId: string, envUuid: string) {
   return callCoolifyApi("delete-env", { appId, envUuid });
+}
+
+// ─── Deployments ────────────────────────────────────────────────────────────
+export async function listDeployments(appId: string) {
+  return callCoolifyApi("list-deployments", { appId });
+}
+
+export async function getBuildLogs(appId: string, deploymentUuid: string) {
+  return callCoolifyApi("get-build-logs", { appId, deploymentUuid });
 }
