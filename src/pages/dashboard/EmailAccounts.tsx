@@ -72,7 +72,7 @@ const EmailAccounts = () => {
     } catch (err: any) {
       const msg = err?.message || "";
       if (msg.includes("404") || msg.includes("Not Found")) {
-        toast.error("Mail server is not available on this server. Please enable it from CyberPanel → Server Status → Services.");
+        toast.error("Mail service is not available for this website. Please contact support.");
       } else {
         toast.error(msg || "Failed to list emails");
       }
