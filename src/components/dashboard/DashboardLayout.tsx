@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate, Outlet } from "react-router-dom";
 import {
-  Server, Globe, Database, Upload, Mail, Shield, Settings, LogOut,
-  Menu, X, Home, CreditCard, HelpCircle, LayoutGrid, Loader2,
-  ShoppingBag, Search, Package, ShieldCheck, Archive,
+  Globe, Database, Mail, Shield, Settings, LogOut,
+  Menu, X, Home, CreditCard, HelpCircle, Loader2,
+  ShoppingBag, Search, BarChart3, Rocket, ChevronDown,
+  ChevronRight, ShieldCheck, Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -11,19 +12,37 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-const navItems = [
-  { icon: Home, label: "Overview", path: "/dashboard" },
-  { icon: Globe, label: "Websites", path: "/dashboard/websites" },
-  { icon: Server, label: "My Hosting", path: "/dashboard/hosting" },
-  { icon: Package, label: "Buy Hosting", path: "/dashboard/buy-hosting" },
-  { icon: LayoutGrid, label: "Domains", path: "/dashboard/domains" },
-  { icon: Search, label: "Search Domains", path: "/dashboard/search-domain" },
-  { icon: Database, label: "Databases", path: "/dashboard/databases" },
-  { icon: Upload, label: "File Manager", path: "/dashboard/files" },
-  { icon: Mail, label: "Email", path: "/dashboard/email" },
-  { icon: Shield, label: "SSL / Security", path: "/dashboard/security" },
-  
-  { icon: Archive, label: "Backups", path: "/dashboard/backups" },
+interface NavItem {
+  icon: typeof Home;
+  label: string;
+  path: string;
+}
+
+interface NavGroup {
+  label: string;
+  icon: typeof Home;
+  items: NavItem[];
+}
+
+type NavEntry = NavItem | NavGroup;
+
+const isGroup = (entry: NavEntry): entry is NavGroup => "items" in entry;
+
+const navigation: NavEntry[] = [
+  { icon: Home, label: "Dashboard", path: "/dashboard" },
+  {
+    label: "Services",
+    icon: Package,
+    items: [
+      { icon: Globe, label: "Websites", path: "/dashboard/websites" },
+      { icon: Rocket, label: "Applications", path: "/dashboard/applications" },
+      { icon: Database, label: "Databases", path: "/dashboard/databases" },
+      { icon: Mail, label: "Emails", path: "/dashboard/email" },
+    ],
+  },
+  { icon: Globe, label: "Domains", path: "/dashboard/domains" },
+  { icon: BarChart3, label: "Usage & Limits", path: "/dashboard/usage" },
+  { icon: Shield, label: "Security", path: "/dashboard/security" },
   { icon: ShoppingBag, label: "Orders", path: "/dashboard/orders" },
   { icon: CreditCard, label: "Billing", path: "/dashboard/billing" },
   { icon: HelpCircle, label: "Support", path: "/dashboard/support" },
@@ -38,6 +57,7 @@ interface UserProfile {
 
 const DashboardLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [servicesOpen, setServicesOpen] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const { user, signOut } = useAuth();
@@ -58,6 +78,14 @@ const DashboardLayout = () => {
     };
     fetchProfile();
   }, [user]);
+
+  // Auto-expand services group if on a services route
+  useEffect(() => {
+    const servicesPaths = ["/dashboard/websites", "/dashboard/applications", "/dashboard/databases", "/dashboard/email"];
+    if (servicesPaths.some((p) => location.pathname.startsWith(p))) {
+      setServicesOpen(true);
+    }
+  }, [location.pathname]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -82,6 +110,67 @@ const DashboardLayout = () => {
     return location.pathname.startsWith(path);
   };
 
+  const renderNavItem = (item: NavItem) => (
+    <Link
+      key={item.path}
+      to={item.path}
+      onClick={() => setSidebarOpen(false)}
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+        isActive(item.path)
+          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+          : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+      }`}
+    >
+      <item.icon className="w-5 h-5" />
+      {item.label}
+    </Link>
+  );
+
+  const renderNavGroup = (group: NavGroup) => {
+    const isGroupActive = group.items.some((item) => isActive(item.path));
+    return (
+      <div key={group.label}>
+        <button
+          onClick={() => setServicesOpen((prev) => !prev)}
+          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+            isGroupActive
+              ? "text-sidebar-accent-foreground"
+              : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+          }`}
+        >
+          <span className="flex items-center gap-3">
+            <group.icon className="w-5 h-5" />
+            {group.label}
+          </span>
+          {servicesOpen ? (
+            <ChevronDown className="w-4 h-4" />
+          ) : (
+            <ChevronRight className="w-4 h-4" />
+          )}
+        </button>
+        {servicesOpen && (
+          <div className="ml-4 mt-1 space-y-0.5 border-l border-sidebar-border pl-3">
+            {group.items.map((item) => (
+              <Link
+                key={item.path}
+                to={item.path}
+                onClick={() => setSidebarOpen(false)}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                  isActive(item.path)
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                    : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                }`}
+              >
+                <item.icon className="w-4 h-4" />
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-background flex">
       {/* Sidebar */}
@@ -94,7 +183,7 @@ const DashboardLayout = () => {
           <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
             <Link to="/" className="flex items-center gap-2">
               <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center">
-                <Server className="w-5 h-5 text-sidebar-primary-foreground" />
+                <Rocket className="w-5 h-5 text-sidebar-primary-foreground" />
               </div>
               <span className="font-display font-bold text-lg text-sidebar-foreground">
                 Vintechs
@@ -106,21 +195,9 @@ const DashboardLayout = () => {
           </div>
 
           <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-            {navItems.map((item) => (
-              <Link
-                key={item.path}
-                to={item.path}
-                onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  isActive(item.path)
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                }`}
-              >
-                <item.icon className="w-5 h-5" />
-                {item.label}
-              </Link>
-            ))}
+            {navigation.map((entry) =>
+              isGroup(entry) ? renderNavGroup(entry) : renderNavItem(entry)
+            )}
           </nav>
 
           {isAdmin && (
