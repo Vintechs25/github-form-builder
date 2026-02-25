@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ImpersonationProvider } from "@/hooks/useImpersonation";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import MaintenanceGuard from "@/components/MaintenanceGuard";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
@@ -54,6 +55,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <MaintenanceGuard>
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Auth />} />
@@ -111,6 +113,7 @@ const App = () => (
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </MaintenanceGuard>
         </BrowserRouter>
       </TooltipProvider>
       </ImpersonationProvider>
