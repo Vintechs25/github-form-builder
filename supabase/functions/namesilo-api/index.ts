@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveApiKey } from "../_shared/resolveApiKey.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -133,8 +134,8 @@ serve(async (req) => {
     }
     const userId = user.id;
 
-    // Get API key
-    const NAMESILO_API_KEY = Deno.env.get("NAMESILO_API_KEY");
+    // Get API key (DB config first, then env var)
+    const NAMESILO_API_KEY = await resolveApiKey("namesilo-api", "NAMESILO_API_KEY", "NAMESILO_API_KEY");
     if (!NAMESILO_API_KEY) {
       console.error("NAMESILO_API_KEY is not configured");
       return new Response(

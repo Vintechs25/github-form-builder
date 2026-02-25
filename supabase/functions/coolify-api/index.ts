@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveApiKey } from "../_shared/resolveApiKey.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,7 +46,7 @@ Deno.serve(async (req) => {
     return json({ error: "Unauthorized" }, 401);
   }
 
-  const COOLIFY_TOKEN = Deno.env.get("COOLIFY_API_TOKEN");
+  const COOLIFY_TOKEN = await resolveApiKey("coolify-api", "COOLIFY_API_TOKEN", "COOLIFY_API_TOKEN");
   if (!COOLIFY_TOKEN) {
     return json({ error: "COOLIFY_API_TOKEN not configured" }, 500);
   }

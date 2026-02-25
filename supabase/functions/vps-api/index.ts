@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveApiKey } from "../_shared/resolveApiKey.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -250,9 +251,9 @@ serve(async (req) => {
     }
     const userId = claimsData.claims.sub;
 
-    // Get CyberPanel credentials
-    const CYBERPANEL_USER = Deno.env.get("CYBERPANEL_USER");
-    const CYBERPANEL_PASS = Deno.env.get("CYBERPANEL_PASS");
+    // Get CyberPanel credentials (DB config first, then env vars)
+    const CYBERPANEL_USER = await resolveApiKey("vps-api", "CYBERPANEL_USER", "CYBERPANEL_USER");
+    const CYBERPANEL_PASS = await resolveApiKey("vps-api", "CYBERPANEL_PASS", "CYBERPANEL_PASS");
     if (!CYBERPANEL_USER || !CYBERPANEL_PASS) {
       return new Response(
         JSON.stringify({ error: "Server credentials not configured" }),

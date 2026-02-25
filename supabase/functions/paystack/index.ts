@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveApiKey } from "../_shared/resolveApiKey.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -226,7 +227,7 @@ serve(async (req) => {
   }
 
   try {
-    const PAYSTACK_SECRET_KEY = Deno.env.get("PAYSTACK_SECRET_KEY");
+    const PAYSTACK_SECRET_KEY = await resolveApiKey("paystack", "PAYSTACK_SECRET_KEY", "PAYSTACK_SECRET_KEY");
     if (!PAYSTACK_SECRET_KEY) {
       console.error("[paystack] PAYSTACK_SECRET_KEY not configured");
       return new Response(JSON.stringify({ error: "Paystack not configured" }), {
