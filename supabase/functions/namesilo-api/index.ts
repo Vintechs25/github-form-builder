@@ -162,10 +162,16 @@ serve(async (req) => {
         const xml = await callNameSilo(NAMESILO_API_KEY, "checkRegisterAvailability", {
           domains: params.domain,
         });
+        console.log(`[namesilo-api] Raw XML for ${params.domain}:`, xml);
         const code = parseXmlValue(xml, "code");
-        const available = xml.includes("<available>");
+        // NameSilo puts available domains inside <available><domain>...</domain></available>
+        // and unavailable ones inside <unavailable><domain>...</domain></unavailable>
+        const availableSection = xml.match(/<available>([\s\S]*?)<\/available>/);
+        const isAvailable = availableSection
+          ? availableSection[1].includes(params.domain)
+          : false;
         const price = parseXmlValue(xml, "price");
-        result = { domain: params.domain, available, price: price ? parseFloat(price) : null, code };
+        result = { domain: params.domain, available: isAvailable, price: price ? parseFloat(price) : null, code };
         break;
       }
 
