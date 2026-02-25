@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { assertApiEnabled } from "@/services/apiGateService";
 
 type NameSiloAction =
   | "checkAvailability"
@@ -10,6 +11,7 @@ type NameSiloAction =
   | "changeNameservers";
 
 async function callNameSiloApi(action: NameSiloAction, params: Record<string, unknown> = {}) {
+  await assertApiEnabled("namesilo-api", "Domain Registrar");
   const { data, error } = await supabase.functions.invoke("namesilo-api", {
     body: { action, ...params },
   });
@@ -55,6 +57,7 @@ export async function changeNameservers(
 }
 
 export async function processOrder(orderId: string) {
+  await assertApiEnabled("process-order", "Order Processor");
   const { data, error } = await supabase.functions.invoke("process-order", {
     body: { order_id: orderId },
   });
