@@ -9,11 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Progress } from "@/components/ui/progress";
-import { Search, MoreVertical, Eye, ShieldCheck, UserCog, Server, Globe, CreditCard, Package, BarChart3, Pause, Play, LogIn } from "lucide-react";
+import { Search, MoreVertical, Eye, ShieldCheck, UserCog, Server, Globe, CreditCard, Package, BarChart3, Pause, Play, LogIn, Plus, Trash2, KeyRound, LogOut as LogOutIcon, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { useImpersonation } from "@/hooks/useImpersonation";
 import { useNavigate } from "react-router-dom";
+import { logAudit } from "@/lib/auditLog";
 
 interface Profile {
   id: string; user_id: string; first_name: string | null; last_name: string | null;
@@ -41,6 +42,16 @@ const AdminUsers = () => {
   const [planDialogOpen, setPlanDialogOpen] = useState(false);
   const [planDialogUser, setPlanDialogUser] = useState<Profile | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState("");
+
+  // Create user
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createForm, setCreateForm] = useState({ email: "", password: "", first_name: "", last_name: "" });
+  const [creating, setCreating] = useState(false);
+
+  // Reset password
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetUser, setResetUser] = useState<Profile | null>(null);
+  const [newPassword, setNewPassword] = useState("");
 
   const load = async () => {
     const [{ data: profs }, { data: userRoles }, { data: plansData }] = await Promise.all([
@@ -82,8 +93,56 @@ const AdminUsers = () => {
     const newStatus = profile.account_status === "active" ? "suspended" : "active";
     const { error } = await supabase.from("profiles").update({ account_status: newStatus }).eq("id", profile.id);
     if (error) { toast.error(error.message); return; }
+    logAudit(newStatus === "suspended" ? "suspend_user" : "reactivate_user", "user", profile.user_id, { email: profile.email });
     toast.success(`User ${newStatus === "active" ? "reactivated" : "suspended"}`);
     load();
+  };
+
+  const createUser = async () => {
+    if (!createForm.email || !createForm.password) { toast.error("Email and password are required"); return; }
+    setCreating(true);
+    const { data, error } = await supabase.functions.invoke("admin-actions", {
+      body: { action: "create-user", ...createForm },
+    });
+    if (error || data?.error) { toast.error(data?.error || error?.message || "Failed"); setCreating(false); return; }
+    logAudit("create_user", "user", data?.user_id, { email: createForm.email });
+    toast.success("User created successfully");
+    setCreateDialogOpen(false);
+    setCreateForm({ email: "", password: "", first_name: "", last_name: "" });
+    setCreating(false);
+    load();
+  };
+
+  const deleteUser = async (profile: Profile) => {
+    if (!confirm(`⚠️ Permanently delete ${profile.email}? All data will be removed.`)) return;
+    const { data, error } = await supabase.functions.invoke("admin-actions", {
+      body: { action: "delete-user", user_id: profile.user_id },
+    });
+    if (error || data?.error) { toast.error(data?.error || error?.message || "Failed"); return; }
+    logAudit("delete_user", "user", profile.user_id, { email: profile.email });
+    toast.success("User deleted");
+    load();
+  };
+
+  const resetPassword = async () => {
+    if (!resetUser || !newPassword) { toast.error("Password is required"); return; }
+    const { data, error } = await supabase.functions.invoke("admin-actions", {
+      body: { action: "reset-password", user_id: resetUser.user_id, new_password: newPassword },
+    });
+    if (error || data?.error) { toast.error(data?.error || error?.message || "Failed"); return; }
+    logAudit("reset_password", "user", resetUser.user_id, { email: resetUser.email });
+    toast.success("Password reset successfully");
+    setResetDialogOpen(false);
+    setNewPassword("");
+  };
+
+  const forceLogout = async (profile: Profile) => {
+    const { data, error } = await supabase.functions.invoke("admin-actions", {
+      body: { action: "force-logout", user_id: profile.user_id },
+    });
+    if (error || data?.error) { toast.error(data?.error || error?.message || "Failed"); return; }
+    logAudit("force_logout", "user", profile.user_id, { email: profile.email });
+    toast.success(`All sessions for ${profile.email} terminated`);
   };
 
   const openAssignPlan = (profile: Profile) => {
@@ -143,6 +202,9 @@ const AdminUsers = () => {
           <h1 className="font-display font-semibold text-lg">Users</h1>
           <p className="text-sm text-muted-foreground">{profiles.length} registered users</p>
         </div>
+        <Button size="sm" onClick={() => setCreateDialogOpen(true)}>
+          <Plus className="w-4 h-4 mr-1" /> Create User
+        </Button>
       </div>
 
       <div className="relative max-w-sm">
@@ -230,6 +292,17 @@ const AdminUsers = () => {
                           </DropdownMenuItem>
                         </>
                       )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => { setResetUser(p); setNewPassword(""); setResetDialogOpen(true); }}>
+                        <KeyRound className="w-4 h-4 mr-2" /> Reset Password
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => forceLogout(p)}>
+                        <LogOutIcon className="w-4 h-4 mr-2" /> Force Logout
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => deleteUser(p)} className="text-destructive">
+                        <Trash2 className="w-4 h-4 mr-2" /> Delete Account
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
@@ -378,6 +451,37 @@ const AdminUsers = () => {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+      {/* Create User Dialog */}
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Create New User</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>First Name</Label><Input value={createForm.first_name} onChange={e => setCreateForm(p => ({ ...p, first_name: e.target.value }))} /></div>
+              <div><Label>Last Name</Label><Input value={createForm.last_name} onChange={e => setCreateForm(p => ({ ...p, last_name: e.target.value }))} /></div>
+            </div>
+            <div><Label>Email</Label><Input type="email" value={createForm.email} onChange={e => setCreateForm(p => ({ ...p, email: e.target.value }))} /></div>
+            <div><Label>Password</Label><Input type="password" value={createForm.password} onChange={e => setCreateForm(p => ({ ...p, password: e.target.value }))} /></div>
+            <Button onClick={createUser} disabled={creating} className="w-full">
+              {creating ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Plus className="w-3.5 h-3.5 mr-1.5" />}
+              Create User
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Reset Password — {resetUser?.email}</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div><Label>New Password</Label><Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Min 6 characters" /></div>
+            <Button onClick={resetPassword} className="w-full">
+              <KeyRound className="w-3.5 h-3.5 mr-1.5" /> Reset Password
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

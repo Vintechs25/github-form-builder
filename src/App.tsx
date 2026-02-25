@@ -44,7 +44,10 @@ import AdminTickets from "./pages/admin/AdminTickets";
 import AdminReports from "./pages/admin/AdminReports";
 import AdminSettings from "./pages/admin/AdminSettings";
 import AdminDomainPricing from "./pages/admin/AdminDomainPricing";
-
+import AdminCoupons from "./pages/admin/AdminCoupons";
+import AdminAuditLogs from "./pages/admin/AdminAuditLogs";
+import AdminMonitoring from "./pages/admin/AdminMonitoring";
+import AdminEmergency from "./pages/admin/AdminEmergency";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -107,8 +110,12 @@ const App = () => (
               <Route path="invoices" element={<AdminInvoices />} />
               <Route path="domains" element={<AdminDomains />} />
               <Route path="domain-pricing" element={<AdminDomainPricing />} />
+              <Route path="coupons" element={<AdminCoupons />} />
               <Route path="tickets" element={<AdminTickets />} />
               <Route path="reports" element={<AdminReports />} />
+              <Route path="monitoring" element={<AdminMonitoring />} />
+              <Route path="audit-logs" element={<AdminAuditLogs />} />
+              <Route path="emergency" element={<AdminEmergency />} />
               <Route path="settings" element={<AdminSettings />} />
             </Route>
             <Route path="*" element={<NotFound />} />

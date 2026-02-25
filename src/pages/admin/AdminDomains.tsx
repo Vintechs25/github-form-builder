@@ -5,9 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { Search, MoreVertical, Trash2 } from "lucide-react";
+import { Search, MoreVertical, Trash2, RefreshCw, Globe, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { logAudit } from "@/lib/auditLog";
 
 const AdminDomains = () => {
   const [domains, setDomains] = useState<any[]>([]);
@@ -23,15 +24,34 @@ const AdminDomains = () => {
 
   useEffect(() => { load(); }, []);
 
-  const deleteDomain = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this domain and its DNS records? This cannot be undone.")) return;
-    // Delete linked dns_records first
-    const { error: dnsErr } = await supabase.from("dns_records").delete().eq("domain_id", id);
-    if (dnsErr) { toast.error(dnsErr.message); return; }
+  const deleteDomain = async (id: string, name: string) => {
+    if (!confirm(`Delete ${name} and all DNS records? This cannot be undone.`)) return;
+    await supabase.from("dns_records").delete().eq("domain_id", id);
     const { error } = await supabase.from("domains").delete().eq("id", id);
     if (error) { toast.error(error.message); return; }
+    logAudit("delete_domain", "domain", id, { domain_name: name });
     toast.success("Domain deleted");
     load();
+  };
+
+  const [refreshing, setRefreshing] = useState<string | null>(null);
+  const forceDnsRefresh = async (domain: any) => {
+    setRefreshing(domain.id);
+    const { error } = await supabase.functions.invoke("vps-api", {
+      body: { action: "list-dns-records", domain: domain.domain_name, recordType: "aRecord" },
+    });
+    if (error) toast.error("DNS refresh failed");
+    else { logAudit("force_dns_refresh", "domain", domain.id, { domain_name: domain.domain_name }); toast.success(`DNS refreshed for ${domain.domain_name}`); }
+    setRefreshing(null);
+  };
+
+  const deleteDnsZone = async (domain: any) => {
+    if (!confirm(`Delete DNS zone for ${domain.domain_name}? This removes all server-side DNS records.`)) return;
+    const { error } = await supabase.functions.invoke("vps-api", {
+      body: { action: "delete-dns-zone", domain: domain.domain_name },
+    });
+    if (error) toast.error("Failed to delete DNS zone");
+    else { logAudit("delete_dns_zone", "domain", domain.id, { domain_name: domain.domain_name }); toast.success(`DNS zone deleted for ${domain.domain_name}`); }
   };
 
   const filtered = domains.filter(d => !search || d.domain_name.toLowerCase().includes(search.toLowerCase()));
@@ -77,11 +97,20 @@ const AdminDomains = () => {
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        {refreshing === d.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <MoreVertical className="w-4 h-4" />}
+                      </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => deleteDomain(d.id)} className="text-destructive">
-                        <Trash2 className="w-4 h-4 mr-2" /> Delete
+                      <DropdownMenuItem onClick={() => forceDnsRefresh(d)}>
+                        <RefreshCw className="w-4 h-4 mr-2" /> Force DNS Refresh
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => deleteDnsZone(d)}>
+                        <Globe className="w-4 h-4 mr-2" /> Delete DNS Zone
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => deleteDomain(d.id, d.domain_name)} className="text-destructive">
+                        <Trash2 className="w-4 h-4 mr-2" /> Delete Domain
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

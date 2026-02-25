@@ -4,13 +4,14 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { Search, MoreVertical, Play, Pause, Trash2, ShieldCheck, Package } from "lucide-react";
+import { Search, MoreVertical, Play, Pause, Trash2, ShieldCheck, Package, RefreshCw, StopCircle, ScrollText, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { logAudit } from "@/lib/auditLog";
 
 const AdminServices = () => {
   const [services, setServices] = useState<any[]>([]);
@@ -42,6 +43,7 @@ const AdminServices = () => {
   const updateStatus = async (id: string, status: string) => {
     const { error } = await supabase.from("hosting_accounts").update({ status }).eq("id", id);
     if (error) { toast.error(error.message); return; }
+    logAudit(`service_${status}`, "service", id);
     toast.success(`Service ${status}`);
     load();
   };
@@ -50,8 +52,52 @@ const AdminServices = () => {
     if (!confirm("Are you sure you want to delete this service?")) return;
     const { error } = await supabase.from("hosting_accounts").delete().eq("id", id);
     if (error) { toast.error(error.message); return; }
+    logAudit("delete_service", "service", id);
     toast.success("Service deleted");
     load();
+  };
+
+  const forceSSL = async (service: any) => {
+    toast.info(`Issuing SSL for ${service.domain}...`);
+    const { error } = await supabase.functions.invoke("vps-api", { body: { action: "issue-ssl", domain: service.domain } });
+    if (error) { toast.error("SSL issue failed"); return; }
+    await supabase.from("hosting_accounts").update({ ssl_enabled: true }).eq("id", service.id);
+    logAudit("force_ssl", "service", service.id, { domain: service.domain });
+    toast.success(`SSL issued for ${service.domain}`);
+    load();
+  };
+
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [logsDialog, setLogsDialog] = useState<{ open: boolean; domain: string; logs: string }>({ open: false, domain: "", logs: "" });
+
+  const redeployApp = async (service: any) => {
+    if (!service.backend_id) { toast.error("No backend ID"); return; }
+    setActionLoading(service.id);
+    const { error } = await supabase.functions.invoke("coolify-api", { body: { action: "redeploy-app", appId: service.backend_id } });
+    if (error) toast.error("Redeploy failed");
+    else { logAudit("redeploy_app", "service", service.id, { domain: service.domain }); toast.success(`Redeploying ${service.domain}`); }
+    setActionLoading(null);
+  };
+
+  const stopContainer = async (service: any) => {
+    if (!service.backend_id) { toast.error("No backend ID"); return; }
+    setActionLoading(service.id);
+    const { error } = await supabase.functions.invoke("coolify-api", { body: { action: "stop-app", appId: service.backend_id } });
+    if (error) toast.error("Stop failed");
+    else { logAudit("stop_container", "service", service.id, { domain: service.domain }); toast.success(`Stopped ${service.domain}`); }
+    setActionLoading(null);
+  };
+
+  const viewAppLogs = async (service: any) => {
+    if (!service.backend_id) { toast.error("No backend ID"); return; }
+    setActionLoading(service.id);
+    const { data, error } = await supabase.functions.invoke("coolify-api", { body: { action: "get-logs", appId: service.backend_id } });
+    if (error) toast.error("Failed to fetch logs");
+    else {
+      const logs = Array.isArray(data?.logs) ? data.logs.join("\n") : data?.logs || data?.message || "No logs available";
+      setLogsDialog({ open: true, domain: service.domain, logs });
+    }
+    setActionLoading(null);
   };
 
   const openChangePlan = (service: any) => {
@@ -157,12 +203,33 @@ const AdminServices = () => {
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        {actionLoading === s.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <MoreVertical className="w-4 h-4" />}
+                      </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => openChangePlan(s)}>
                         <Package className="w-4 h-4 mr-2" /> Change Plan
                       </DropdownMenuItem>
+                      {s.hosting_type === "shared_hosting" && (
+                        <DropdownMenuItem onClick={() => forceSSL(s)}>
+                          <ShieldCheck className="w-4 h-4 mr-2" /> Force SSL
+                        </DropdownMenuItem>
+                      )}
+                      {s.hosting_type === "application" && s.backend_id && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => redeployApp(s)}>
+                            <RefreshCw className="w-4 h-4 mr-2" /> Redeploy
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => stopContainer(s)}>
+                            <StopCircle className="w-4 h-4 mr-2" /> Stop Container
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => viewAppLogs(s)}>
+                            <ScrollText className="w-4 h-4 mr-2" /> View Logs
+                          </DropdownMenuItem>
+                        </>
+                      )}
                       <DropdownMenuSeparator />
                       {s.status !== "active" && (
                         <DropdownMenuItem onClick={() => updateStatus(s.id, "active")}>
@@ -223,6 +290,15 @@ const AdminServices = () => {
             })()}
             <Button onClick={savePlan} disabled={!selectedPlanId} className="w-full">Save Plan</Button>
           </div>
+        </DialogContent>
+      </Dialog>
+      {/* App Logs Dialog */}
+      <Dialog open={logsDialog.open} onOpenChange={open => setLogsDialog(p => ({ ...p, open }))}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader><DialogTitle>Logs — {logsDialog.domain}</DialogTitle></DialogHeader>
+          <pre className="bg-secondary rounded-lg p-3 text-xs font-mono overflow-auto max-h-[60vh] whitespace-pre-wrap">
+            {logsDialog.logs || "No logs available"}
+          </pre>
         </DialogContent>
       </Dialog>
     </div>
