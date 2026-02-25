@@ -14,6 +14,96 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_activity_logs: {
+        Row: {
+          action: string
+          api_name: string
+          created_at: string
+          details: Json | null
+          id: string
+          performed_by: string | null
+          status: string
+        }
+        Insert: {
+          action: string
+          api_name: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          performed_by?: string | null
+          status?: string
+        }
+        Update: {
+          action?: string
+          api_name?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          performed_by?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
+      api_configurations: {
+        Row: {
+          api_name: string
+          base_url: string | null
+          category: string
+          config: Json | null
+          created_at: string
+          description: string | null
+          display_name: string
+          health_check_url: string | null
+          health_status: string | null
+          id: string
+          is_enabled: boolean
+          last_health_check: string | null
+          rate_limit_per_minute: number | null
+          retry_count: number | null
+          timeout_seconds: number | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          api_name: string
+          base_url?: string | null
+          category?: string
+          config?: Json | null
+          created_at?: string
+          description?: string | null
+          display_name: string
+          health_check_url?: string | null
+          health_status?: string | null
+          id?: string
+          is_enabled?: boolean
+          last_health_check?: string | null
+          rate_limit_per_minute?: number | null
+          retry_count?: number | null
+          timeout_seconds?: number | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          api_name?: string
+          base_url?: string | null
+          category?: string
+          config?: Json | null
+          created_at?: string
+          description?: string | null
+          display_name?: string
+          health_check_url?: string | null
+          health_status?: string | null
+          id?: string
+          is_enabled?: boolean
+          last_health_check?: string | null
+          rate_limit_per_minute?: number | null
+          retry_count?: number | null
+          timeout_seconds?: number | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           action: string

@@ -49,6 +49,7 @@ import AdminCoupons from "./pages/admin/AdminCoupons";
 import AdminAuditLogs from "./pages/admin/AdminAuditLogs";
 import AdminMonitoring from "./pages/admin/AdminMonitoring";
 import AdminEmergency from "./pages/admin/AdminEmergency";
+import AdminApiManagement from "./pages/admin/AdminApiManagement";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -118,6 +119,7 @@ const App = () => (
               <Route path="monitoring" element={<AdminMonitoring />} />
               <Route path="audit-logs" element={<AdminAuditLogs />} />
               <Route path="emergency" element={<AdminEmergency />} />
+              <Route path="api-management" element={<AdminApiManagement />} />
               <Route path="settings" element={<AdminSettings />} />
             </Route>
             <Route path="*" element={<NotFound />} />
