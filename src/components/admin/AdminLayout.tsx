@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate, Outlet } from "react-router-dom";
 import {
   Users, Package, ShoppingBag, CreditCard, Globe, Server,
-  HelpCircle, BarChart3, Settings, LogOut, Menu, X, Shield, Loader2, Home, DollarSign,
+  HelpCircle, BarChart3, Settings, Settings2, LogOut, Menu, X, Shield, Loader2, Home, DollarSign,
   ScrollText, Tag, Zap, Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ const adminNav = [
   { icon: Activity, label: "Monitoring", path: "/admin/monitoring" },
   { icon: ScrollText, label: "Audit Logs", path: "/admin/audit-logs" },
   { icon: Zap, label: "Emergency", path: "/admin/emergency" },
+  { icon: Settings2, label: "API Management", path: "/admin/api-management" },
   { icon: Settings, label: "Settings", path: "/admin/settings" },
 ];
 
