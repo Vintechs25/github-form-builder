@@ -11,7 +11,7 @@ const Footer = () => {
       { label: "Email Hosting", href: "#features" },
     ],
     company: [
-      { label: "About Us", href: "#about" },
+      { label: "About Us", href: "/about" },
       { label: "Blog", href: "#" },
       { label: "Careers", href: "#" },
       { label: "Contact", href: "#support" },

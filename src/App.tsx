@@ -10,6 +10,7 @@ import MaintenanceGuard from "@/components/MaintenanceGuard";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import About from "./pages/About";
 import DashboardLayout from "./components/dashboard/DashboardLayout";
 import Overview from "./pages/dashboard/Overview";
 import Websites from "./pages/dashboard/Websites";
@@ -63,6 +64,7 @@ const App = () => (
           <MaintenanceGuard>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/about" element={<About />} />
             <Route path="/login" element={<Auth />} />
             <Route path="/signup" element={<Auth />} />
             <Route
