@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import {
   DollarSign, TrendingUp, TrendingDown, CreditCard, AlertTriangle,
   Users, Activity, Clock, Plus, FileText, Search, Loader2, ArrowUpRight,
+  Ban, Mail, MoreVertical,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
@@ -177,6 +179,82 @@ const AdminReports = () => {
     setApplyingCredit(false);
   };
 
+  // Cancel subscription
+  const cancelSubscription = async (sub: Subscription) => {
+    if (!confirm(`Cancel subscription for ${sub.domain}? This will mark the service as cancelled.`)) return;
+    const { error } = await supabase.from("hosting_accounts").update({ status: "cancelled" }).eq("id", sub.id);
+    if (error) { toast.error(error.message); return; }
+
+    // Send cancellation email
+    const email = getUserEmail(sub.user_id);
+    const profile = profiles.find(p => p.user_id === sub.user_id);
+    if (email) {
+      supabase.functions.invoke("send-notification-email", {
+        body: {
+          to: email, type: "subscription_cancelled",
+          data: { firstName: profile?.first_name, domain: sub.domain, hostingType: sub.hosting_type, reason: "Cancelled by administrator" },
+        },
+      });
+    }
+    toast.success(`Subscription for ${sub.domain} cancelled`);
+    loadData();
+  };
+
+  // Send dunning email
+  const [sendingDunning, setSendingDunning] = useState<string | null>(null);
+  const sendDunningEmail = async (inv: Invoice) => {
+    const email = getUserEmail(inv.user_id);
+    if (!email) { toast.error("User email not found"); return; }
+    setSendingDunning(inv.id);
+    const profile = profiles.find(p => p.user_id === inv.user_id);
+    const daysOverdue = Math.max(1, Math.floor((Date.now() - new Date(inv.due_date).getTime()) / 86400000));
+    
+    // Find associated service domain
+    const userSubs = subscriptions.filter(s => s.user_id === inv.user_id);
+    const domain = userSubs.length > 0 ? userSubs[0].domain : undefined;
+
+    const { error } = await supabase.functions.invoke("send-notification-email", {
+      body: {
+        to: email, type: "dunning",
+        data: {
+          firstName: profile?.first_name, invoiceNumber: inv.invoice_number,
+          amount: inv.amount, currency: "KES", daysOverdue, domain,
+        },
+      },
+    });
+    if (error) toast.error("Failed to send dunning email");
+    else toast.success(`Dunning email sent to ${email}`);
+    setSendingDunning(null);
+  };
+
+  // Send dunning to all overdue
+  const [sendingBulkDunning, setSendingBulkDunning] = useState(false);
+  const sendBulkDunning = async () => {
+    if (!confirm(`Send dunning emails to all ${overdueInvoices.length} overdue invoice holders?`)) return;
+    setSendingBulkDunning(true);
+    let sent = 0;
+    for (const inv of overdueInvoices) {
+      const email = getUserEmail(inv.user_id);
+      if (!email) continue;
+      const profile = profiles.find(p => p.user_id === inv.user_id);
+      const daysOverdue = Math.max(1, Math.floor((Date.now() - new Date(inv.due_date).getTime()) / 86400000));
+      const userSubs = subscriptions.filter(s => s.user_id === inv.user_id);
+      await supabase.functions.invoke("send-notification-email", {
+        body: {
+          to: email, type: "dunning",
+          data: {
+            firstName: profile?.first_name, invoiceNumber: inv.invoice_number,
+            amount: inv.amount, currency: "KES", daysOverdue,
+            domain: userSubs[0]?.domain,
+          },
+        },
+      });
+      sent++;
+    }
+    toast.success(`Sent ${sent} dunning emails`);
+    setSendingBulkDunning(false);
+  };
+
   const statCards = [
     { label: "Total Revenue", value: `KES ${totalRevenue.toLocaleString()}`, icon: TrendingUp, color: "text-green-500", bg: "bg-green-500/10" },
     { label: "Pending Payments", value: `KES ${pendingRevenue.toLocaleString()}`, icon: Clock, color: "text-orange-500", bg: "bg-orange-500/10", sub: `${unpaidInvoices.length} invoices` },
@@ -339,11 +417,12 @@ const AdminReports = () => {
                   <TableHead>Plan</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Since</TableHead>
+                  <TableHead className="w-12">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {subscriptions.filter(s => s.status === "active").length === 0 ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No active subscriptions</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No active subscriptions</TableCell></TableRow>
                 ) : subscriptions.filter(s => s.status === "active").map(sub => (
                   <TableRow key={sub.id}>
                     <TableCell className="text-sm">{getUser(sub.user_id)}</TableCell>
@@ -356,6 +435,18 @@ const AdminReports = () => {
                     <TableCell className="text-sm">{getPlan(sub.plan_id)}</TableCell>
                     <TableCell><Badge variant="default" className="text-[10px]">Active</Badge></TableCell>
                     <TableCell className="text-xs text-muted-foreground">{format(new Date(sub.created_at), "MMM d, yyyy")}</TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="w-4 h-4" /></Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => cancelSubscription(sub)} className="text-destructive">
+                            <Ban className="w-4 h-4 mr-2" /> Cancel Subscription
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -399,6 +490,14 @@ const AdminReports = () => {
 
         {/* Overdue */}
         <TabsContent value="overdue">
+          {overdueInvoices.length > 0 && (
+            <div className="flex justify-end mb-3">
+              <Button size="sm" variant="destructive" onClick={sendBulkDunning} disabled={sendingBulkDunning}>
+                {sendingBulkDunning ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Mail className="w-3.5 h-3.5 mr-1.5" />}
+                Send Dunning to All ({overdueInvoices.length})
+              </Button>
+            </div>
+          )}
           <div className="bg-card rounded-xl border border-border overflow-hidden">
             <Table>
               <TableHeader>
@@ -408,11 +507,12 @@ const AdminReports = () => {
                   <TableHead>Amount</TableHead>
                   <TableHead>Due Date</TableHead>
                   <TableHead>Days Late</TableHead>
+                  <TableHead className="w-12">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {overdueInvoices.length === 0 ? (
-                  <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No overdue invoices 🎉</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No overdue invoices 🎉</TableCell></TableRow>
                 ) : overdueInvoices.map(inv => {
                   const daysLate = Math.floor((Date.now() - new Date(inv.due_date).getTime()) / 86400000);
                   return (
@@ -423,6 +523,12 @@ const AdminReports = () => {
                       <TableCell className="text-xs text-muted-foreground">{format(new Date(inv.due_date), "MMM d, yyyy")}</TableCell>
                       <TableCell>
                         <Badge variant="destructive" className="text-[10px]">{daysLate} days late</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Send dunning email"
+                          onClick={() => sendDunningEmail(inv)} disabled={sendingDunning === inv.id}>
+                          {sendingDunning === inv.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4 text-destructive" />}
+                        </Button>
                       </TableCell>
                     </TableRow>
                   );

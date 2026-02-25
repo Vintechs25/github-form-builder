@@ -282,6 +282,61 @@ function buildAccountWelcomeEmail(data: any): { subject: string; html: string } 
   return { subject: `🎉 Welcome to VintechHost, ${firstName || "there"}!`, html: wrapInBrandedTemplate(content, `Welcome to VintechHost! Your account is ready.`) };
 }
 
+function buildDunningEmail(data: any): { subject: string; html: string } {
+  const { firstName, invoiceNumber, amount, currency, daysOverdue, domain, dashboardUrl } = data;
+  const urgencyColor = daysOverdue >= 14 ? "#dc2626" : daysOverdue >= 7 ? "#ea580c" : "#d97706";
+  const urgencyLabel = daysOverdue >= 14 ? "Final Notice" : daysOverdue >= 7 ? "Urgent Reminder" : "Payment Reminder";
+  const content = `
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="display:inline-block;width:56px;height:56px;border-radius:50%;background-color:#fef2f2;line-height:56px;font-size:28px;">📢</div>
+    </div>
+    <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:${urgencyColor};text-align:center;">${urgencyLabel}</h2>
+    <p style="margin:0 0 24px;font-size:15px;color:#6b7280;text-align:center;">Invoice #${invoiceNumber} is ${daysOverdue} days overdue</p>
+    <p style="font-size:15px;color:#374151;line-height:1.6;">Hi${firstName ? ` ${firstName}` : ""},</p>
+    <p style="font-size:15px;color:#374151;line-height:1.6;">This is a reminder that your invoice <strong>#${invoiceNumber}</strong> remains unpaid and is now <strong style="color:${urgencyColor};">${daysOverdue} days overdue</strong>.</p>
+    ${infoTable([
+      ["Invoice", `#${invoiceNumber}`],
+      ["Amount Due", `${currency || "KES"} ${Number(amount).toLocaleString()}`],
+      ["Days Overdue", `${daysOverdue}`],
+      ...(domain ? [["Service", domain]] : []),
+    ])}
+    ${daysOverdue >= 14
+      ? `<div style="background-color:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin:20px 0;">
+          <p style="margin:0;font-size:14px;color:#dc2626;font-weight:600;">⚠️ Final Warning</p>
+          <p style="margin:8px 0 0;font-size:13px;color:#991b1b;">Your service will be suspended if payment is not received within 48 hours. Please pay immediately to avoid disruption.</p>
+        </div>`
+      : daysOverdue >= 7
+        ? `<p style="font-size:15px;color:#374151;line-height:1.6;">Please settle this invoice promptly to avoid service suspension.</p>`
+        : `<p style="font-size:15px;color:#374151;line-height:1.6;">Please make payment at your earliest convenience.</p>`
+    }
+    ${emailButton("Pay Now", dashboardUrl || "https://vintechdev.store/dashboard/billing", urgencyColor)}
+    <p style="font-size:13px;color:#9ca3af;">If you've already made this payment, please disregard this email.</p>
+  `;
+  return { subject: `📢 ${urgencyLabel}: Invoice #${invoiceNumber} — ${currency || "KES"} ${Number(amount).toLocaleString()}`, html: wrapInBrandedTemplate(content, `Invoice #${invoiceNumber} is ${daysOverdue} days overdue.`) };
+}
+
+function buildSubscriptionCancelledEmail(data: any): { subject: string; html: string } {
+  const { firstName, domain, hostingType, reason } = data;
+  const content = `
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="display:inline-block;width:56px;height:56px;border-radius:50%;background-color:#fef2f2;line-height:56px;font-size:28px;">❌</div>
+    </div>
+    <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#dc2626;text-align:center;">Subscription Cancelled</h2>
+    <p style="margin:0 0 24px;font-size:15px;color:#6b7280;text-align:center;">Your service has been terminated</p>
+    <p style="font-size:15px;color:#374151;line-height:1.6;">Hi${firstName ? ` ${firstName}` : ""},</p>
+    <p style="font-size:15px;color:#374151;line-height:1.6;">Your ${hostingType === "shared_hosting" ? "website hosting" : "application hosting"} for <strong>${domain}</strong> has been <strong style="color:#dc2626;">cancelled</strong>.</p>
+    ${infoTable([
+      ["Service", domain],
+      ["Type", hostingType === "shared_hosting" ? "Website" : "Application"],
+      ["Status", "Cancelled"],
+      ...(reason ? [["Reason", reason]] : []),
+    ])}
+    <p style="font-size:15px;color:#374151;line-height:1.6;">If you'd like to reactivate your service or have questions, please contact our support team.</p>
+    ${emailButton("Contact Support", "https://vintechdev.store/dashboard/support", "#6b7280")}
+  `;
+  return { subject: `❌ Subscription Cancelled: ${domain}`, html: wrapInBrandedTemplate(content, `Your subscription for ${domain} has been cancelled.`) };
+}
+
 // ─── TEMPLATE ROUTER ────────────────────────────────────────────────
 function buildEmail(type: string, data: any): { subject: string; html: string } | null {
   switch (type) {
@@ -295,6 +350,8 @@ function buildEmail(type: string, data: any): { subject: string; html: string } 
     case "ssl_issued": return buildSslIssuedEmail(data);
     case "ticket_reply": return buildTicketReplyEmail(data);
     case "account_welcome": return buildAccountWelcomeEmail(data);
+    case "dunning": return buildDunningEmail(data);
+    case "subscription_cancelled": return buildSubscriptionCancelledEmail(data);
     default: return null;
   }
 }
