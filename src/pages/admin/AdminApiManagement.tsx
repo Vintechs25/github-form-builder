@@ -202,9 +202,23 @@ const AdminApiManagement = () => {
   const saveConfig = async () => {
     if (!selectedApi) return;
     setSaving(true);
+
+    // Build updated config with any pending API key values
+    const secrets = API_SECRETS_MAP[selectedApi.api_name];
+    let updatedConfig = { ...(selectedApi.config || {}) } as Record<string, unknown>;
+    if (secrets) {
+      for (const secret of secrets) {
+        const val = apiKeyValues[secret.secretKey]?.trim();
+        if (val) {
+          updatedConfig[secret.secretKey] = val;
+        }
+      }
+    }
+
     const { error } = await supabase
       .from("api_configurations")
       .update({
+        config: updatedConfig as any,
         rate_limit_per_minute: editRate,
         timeout_seconds: editTimeout,
         retry_count: editRetry,
