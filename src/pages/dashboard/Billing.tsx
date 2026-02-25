@@ -7,11 +7,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import jsPDF from "jspdf";
 
-interface ContextType { user: User | null; }
+interface ContextType {
+  user: User | null;
+  profile: { first_name: string | null; last_name: string | null; email: string | null } | null;
+}
 
 const Billing = () => {
-  const { user } = useOutletContext<ContextType>();
+  const { user, profile } = useOutletContext<ContextType>();
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState<string | null>(null);
@@ -33,15 +37,11 @@ const Billing = () => {
     setPaying(invoice.id);
     try {
       const callbackUrl = `${window.location.origin}/dashboard/payment-callback`;
-
       const { data, error } = await supabase.functions.invoke("paystack/initialize", {
         body: { invoice_id: invoice.id, callback_url: callbackUrl },
       });
-
       if (error) throw new Error(error.message);
-
       if (data?.authorization_url) {
-        // Redirect to Paystack checkout
         window.location.href = data.authorization_url;
       } else {
         throw new Error("Failed to get payment URL");
@@ -49,6 +49,121 @@ const Billing = () => {
     } catch (err: any) {
       toast.error(err.message || "Payment initialization failed");
       setPaying(null);
+    }
+  };
+
+  const downloadInvoice = (inv: any) => {
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 20;
+      let y = 25;
+
+      // Header
+      doc.setFontSize(22);
+      doc.setFont("helvetica", "bold");
+      doc.text("INVOICE", margin, y);
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100);
+      doc.text("Vintechs Cloud Hosting", pageWidth - margin, y, { align: "right" });
+      y += 6;
+      doc.text("support@vintechcyber.com", pageWidth - margin, y, { align: "right" });
+
+      // Invoice details
+      y += 20;
+      doc.setTextColor(0);
+      doc.setFontSize(10);
+
+      const details = [
+        ["Invoice Number:", inv.invoice_number],
+        ["Date Issued:", new Date(inv.created_at).toLocaleDateString()],
+        ["Due Date:", new Date(inv.due_date).toLocaleDateString()],
+        ["Status:", inv.status.toUpperCase()],
+      ];
+
+      if (inv.paid_at) {
+        details.push(["Paid On:", new Date(inv.paid_at).toLocaleDateString()]);
+      }
+
+      details.forEach(([label, value]) => {
+        doc.setFont("helvetica", "bold");
+        doc.text(label, margin, y);
+        doc.setFont("helvetica", "normal");
+        doc.text(value, margin + 45, y);
+        y += 6;
+      });
+
+      // Bill To
+      y += 8;
+      doc.setFont("helvetica", "bold");
+      doc.text("Bill To:", margin, y);
+      y += 6;
+      doc.setFont("helvetica", "normal");
+      const clientName = profile?.first_name && profile?.last_name
+        ? `${profile.first_name} ${profile.last_name}`
+        : user?.email || "Customer";
+      doc.text(clientName, margin, y);
+      y += 5;
+      doc.text(profile?.email || user?.email || "", margin, y);
+
+      // Separator
+      y += 12;
+      doc.setDrawColor(200);
+      doc.setLineWidth(0.5);
+      doc.line(margin, y, pageWidth - margin, y);
+
+      // Table header
+      y += 10;
+      doc.setFillColor(245, 245, 245);
+      doc.rect(margin, y - 5, pageWidth - margin * 2, 10, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text("Description", margin + 3, y);
+      doc.text("Amount", pageWidth - margin - 3, y, { align: "right" });
+
+      // Table row
+      y += 12;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text(inv.description || "Hosting Service", margin + 3, y);
+      doc.text(`KES ${Number(inv.amount).toLocaleString()}`, pageWidth - margin - 3, y, { align: "right" });
+
+      // Total
+      y += 12;
+      doc.line(margin, y, pageWidth - margin, y);
+      y += 10;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text("Total:", pageWidth - margin - 60, y);
+      doc.text(`KES ${Number(inv.amount).toLocaleString()}`, pageWidth - margin - 3, y, { align: "right" });
+
+      // Payment status badge
+      y += 16;
+      if (inv.status === "paid") {
+        doc.setFontSize(14);
+        doc.setTextColor(34, 139, 34);
+        doc.setFont("helvetica", "bold");
+        doc.text("✓ PAID", pageWidth / 2, y, { align: "center" });
+      } else {
+        doc.setFontSize(14);
+        doc.setTextColor(200, 100, 0);
+        doc.setFont("helvetica", "bold");
+        doc.text("UNPAID", pageWidth / 2, y, { align: "center" });
+      }
+
+      // Footer
+      doc.setTextColor(150);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.text("Thank you for your business.", pageWidth / 2, 275, { align: "center" });
+      doc.text("Vintechs Cloud Hosting — vintechcyber.com", pageWidth / 2, 280, { align: "center" });
+
+      doc.save(`invoice-${inv.invoice_number}.pdf`);
+      toast.success("Invoice downloaded");
+    } catch {
+      toast.error("Failed to generate invoice");
     }
   };
 
@@ -68,7 +183,6 @@ const Billing = () => {
         <p className="text-sm text-muted-foreground">View invoices and payment history</p>
       </div>
 
-      {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { label: "Total Invoices", value: invoices.length },
@@ -108,22 +222,25 @@ const Billing = () => {
                 <TableRow key={inv.id}>
                   <TableCell className="font-medium font-mono text-sm">{inv.invoice_number}</TableCell>
                   <TableCell>{inv.description || "—"}</TableCell>
-                  <TableCell className="font-semibold">{inv.currency} {Number(inv.amount).toLocaleString()}</TableCell>
+                  <TableCell className="font-semibold">KES {Number(inv.amount).toLocaleString()}</TableCell>
                   <TableCell><Badge variant="outline" className={statusColor(inv.status)}>{inv.status}</Badge></TableCell>
                   <TableCell className="text-sm">{new Date(inv.due_date).toLocaleDateString()}</TableCell>
                   <TableCell>
-                    {inv.status === "unpaid" || inv.status === "overdue" ? (
-                      <Button
-                        variant="accent"
-                        size="sm"
-                        onClick={() => handlePay(inv)}
-                        disabled={paying === inv.id}
-                      >
-                        {paying === inv.id ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Redirecting...</> : "Pay with Paystack"}
+                    <div className="flex gap-2">
+                      {(inv.status === "unpaid" || inv.status === "overdue") && (
+                        <Button
+                          variant="accent"
+                          size="sm"
+                          onClick={() => handlePay(inv)}
+                          disabled={paying === inv.id}
+                        >
+                          {paying === inv.id ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Redirecting...</> : "Pay Now"}
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="sm" onClick={() => downloadInvoice(inv)} title="Download Invoice">
+                        <Download className="w-4 h-4" />
                       </Button>
-                    ) : (
-                      <Button variant="ghost" size="sm"><Download className="w-4 h-4" /></Button>
-                    )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
