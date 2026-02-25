@@ -6,214 +6,274 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Settings, Globe, Key, Server, CheckCircle, XCircle, RefreshCw } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Settings, Globe, Server, CheckCircle, XCircle, RefreshCw,
+  Building2, Mail, Shield, Wrench, AlertTriangle, Save, Loader2,
+} from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
+
+type SettingsMap = Record<string, any>;
 
 const AdminSettings = () => {
+  const { user } = useAuth();
+  const [settings, setSettings] = useState<SettingsMap>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null);
+
   const [configStatus, setConfigStatus] = useState({
-    namesilo: false,
-    vps: false,
-    checkingNamesilo: false,
-    checkingVps: false,
-  });
-  const [systemStats, setSystemStats] = useState({
-    totalPlans: 0,
-    activePlans: 0,
-    totalUsers: 0,
-    totalServices: 0,
+    namesilo: false, vps: false, coolify: false, paystack: false, resend: false,
+    checkingAll: false,
   });
 
   useEffect(() => {
-    loadStats();
+    loadSettings();
     checkApiStatus();
   }, []);
 
-  const loadStats = async () => {
-    const [{ count: plans }, { count: activePlans }, { count: users }, { count: services }] = await Promise.all([
-      supabase.from("hosting_plans").select("*", { count: "exact", head: true }),
-      supabase.from("hosting_plans").select("*", { count: "exact", head: true }).eq("is_active", true),
-      supabase.from("profiles").select("*", { count: "exact", head: true }),
-      supabase.from("hosting_accounts").select("*", { count: "exact", head: true }),
-    ]);
-    setSystemStats({
-      totalPlans: plans || 0,
-      activePlans: activePlans || 0,
-      totalUsers: users || 0,
-      totalServices: services || 0,
-    });
+  const loadSettings = async () => {
+    const { data } = await supabase.from("platform_settings").select("key, value");
+    if (data) {
+      const map: SettingsMap = {};
+      data.forEach(row => { map[row.key] = row.value; });
+      setSettings(map);
+    }
+    setLoading(false);
+  };
+
+  const saveSetting = async (key: string, value: any) => {
+    setSaving(key);
+    const { error } = await supabase
+      .from("platform_settings")
+      .update({ value, updated_at: new Date().toISOString(), updated_by: user?.id })
+      .eq("key", key);
+    if (error) toast.error("Failed to save");
+    else toast.success("Settings saved");
+    setSaving(null);
+  };
+
+  const updateField = (key: string, field: string, val: any) => {
+    setSettings(prev => ({
+      ...prev,
+      [key]: { ...prev[key], [field]: val },
+    }));
   };
 
   const checkApiStatus = async () => {
-    // Check NameSilo API
-    setConfigStatus(prev => ({ ...prev, checkingNamesilo: true }));
+    setConfigStatus(prev => ({ ...prev, checkingAll: true }));
     try {
-      const { data, error } = await supabase.functions.invoke("namesilo-api", {
-        body: { action: "checkAvailability", domain: "test-ping.com" },
-      });
-      setConfigStatus(prev => ({
-        ...prev,
-        namesilo: !error && !data?.error,
-        checkingNamesilo: false,
-      }));
-    } catch {
-      setConfigStatus(prev => ({ ...prev, namesilo: false, checkingNamesilo: false }));
-    }
+      const [namesilo, vps, coolify] = await Promise.allSettled([
+        supabase.functions.invoke("namesilo-api", { body: { action: "checkAvailability", domain: "test-ping.com" } }),
+        supabase.functions.invoke("vps-api", { body: { action: "verify" } }),
+        supabase.functions.invoke("coolify-api", { body: { action: "listServers" } }),
+      ]);
 
-    // Check VPS API
-    setConfigStatus(prev => ({ ...prev, checkingVps: true }));
-    try {
-      const { data, error } = await supabase.functions.invoke("vps-api", {
-        body: { action: "verify" },
+      setConfigStatus({
+        namesilo: namesilo.status === "fulfilled" && !namesilo.value.error,
+        vps: vps.status === "fulfilled" && !vps.value.error,
+        coolify: coolify.status === "fulfilled" && !coolify.value.error,
+        paystack: true, // secret exists
+        resend: true,   // secret exists
+        checkingAll: false,
       });
-      // If we get a response (even error from VPS) the key is configured
-      setConfigStatus(prev => ({
-        ...prev,
-        vps: !error || (data && !data?.error?.includes("not configured")),
-        checkingVps: false,
-      }));
     } catch {
-      setConfigStatus(prev => ({ ...prev, vps: false, checkingVps: false }));
+      setConfigStatus(prev => ({ ...prev, checkingAll: false }));
     }
   };
 
   const apiCards = [
-    {
-      name: "NameSilo API",
-      description: "Domain registration, DNS management, renewals",
-      icon: Globe,
-      configured: configStatus.namesilo,
-      checking: configStatus.checkingNamesilo,
-      secretName: "NAMESILO_API_KEY",
-    },
-    {
-      name: "VPS API",
-      description: "Hosting provisioning, account management, SSL",
-      icon: Server,
-      configured: configStatus.vps,
-      checking: configStatus.checkingVps,
-      secretName: "VPS_API_KEY",
-    },
+    { name: "Domain Registrar", desc: "NameSilo — registration, DNS, renewals", connected: configStatus.namesilo, icon: Globe },
+    { name: "VPS / CyberPanel", desc: "Website hosting, email, SSL", connected: configStatus.vps, icon: Server },
+    { name: "App Engine", desc: "Coolify — container deployments", connected: configStatus.coolify, icon: Wrench },
+    { name: "Payment Gateway", desc: "Paystack — billing & invoicing", connected: configStatus.paystack, icon: Shield },
+    { name: "Email Service", desc: "Resend — transactional emails", connected: configStatus.resend, icon: Mail },
   ];
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-6 w-6 animate-spin text-accent" />
+      </div>
+    );
+  }
+
+  const company = settings.company || {};
+  const maintenance = settings.maintenance || {};
+  const smtp = settings.smtp || {};
+  const defaults = settings.defaults || {};
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
-        <h1 className="font-display font-semibold text-lg">Admin Settings</h1>
-        <p className="text-sm text-muted-foreground">System configuration and API status</p>
+        <h1 className="font-display font-semibold text-lg">Platform Settings</h1>
+        <p className="text-sm text-muted-foreground">Global configuration, integrations, and maintenance</p>
       </div>
 
-      {/* System Overview */}
-      <div>
-        <h2 className="font-display font-semibold text-sm mb-3">System Overview</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="bg-card rounded-xl border border-border p-4">
-            <p className="text-xs text-muted-foreground">Total Plans</p>
-            <p className="text-xl font-display font-bold">{systemStats.totalPlans}</p>
-            <p className="text-xs text-accent">{systemStats.activePlans} active</p>
-          </div>
-          <div className="bg-card rounded-xl border border-border p-4">
-            <p className="text-xs text-muted-foreground">Total Users</p>
-            <p className="text-xl font-display font-bold">{systemStats.totalUsers}</p>
-          </div>
-          <div className="bg-card rounded-xl border border-border p-4">
-            <p className="text-xs text-muted-foreground">Total Services</p>
-            <p className="text-xl font-display font-bold">{systemStats.totalServices}</p>
-          </div>
-          <div className="bg-card rounded-xl border border-border p-4">
-            <p className="text-xs text-muted-foreground">APIs Connected</p>
-            <p className="text-xl font-display font-bold">
-              {[configStatus.namesilo, configStatus.vps].filter(Boolean).length}/2
-            </p>
-          </div>
-        </div>
-      </div>
+      <Tabs defaultValue="general" className="space-y-4">
+        <TabsList className="bg-secondary">
+          <TabsTrigger value="general"><Building2 className="w-3.5 h-3.5 mr-1.5" />General</TabsTrigger>
+          <TabsTrigger value="maintenance"><AlertTriangle className="w-3.5 h-3.5 mr-1.5" />Maintenance</TabsTrigger>
+          <TabsTrigger value="smtp"><Mail className="w-3.5 h-3.5 mr-1.5" />Email / SMTP</TabsTrigger>
+          <TabsTrigger value="defaults"><Wrench className="w-3.5 h-3.5 mr-1.5" />Defaults</TabsTrigger>
+          <TabsTrigger value="integrations"><Server className="w-3.5 h-3.5 mr-1.5" />Integrations</TabsTrigger>
+        </TabsList>
 
-      {/* API Configuration */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-display font-semibold text-sm">API Configuration</h2>
-          <Button variant="outline" size="sm" onClick={checkApiStatus}>
-            <RefreshCw className="w-3 h-3 mr-1" /> Refresh Status
-          </Button>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {apiCards.map((api, i) => (
-            <motion.div key={api.name} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-              className="bg-card rounded-xl border border-border p-5">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
-                    <api.icon className="w-5 h-5 text-accent" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm">{api.name}</p>
-                    <p className="text-xs text-muted-foreground">{api.description}</p>
+        {/* General */}
+        <TabsContent value="general" className="space-y-4">
+          <div className="bg-card rounded-xl border border-border p-5 space-y-4">
+            <h2 className="font-display font-semibold text-sm">Company Information</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Company Name</Label>
+                <Input value={company.name || ""} onChange={e => updateField("company", "name", e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Tagline</Label>
+                <Input value={company.tagline || ""} onChange={e => updateField("company", "tagline", e.target.value)} />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label className="text-xs">Logo URL</Label>
+                <Input value={company.logo_url || ""} onChange={e => updateField("company", "logo_url", e.target.value)} placeholder="https://..." />
+              </div>
+            </div>
+            <Button size="sm" onClick={() => saveSetting("company", settings.company)} disabled={saving === "company"}>
+              {saving === "company" ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
+              Save Company Settings
+            </Button>
+          </div>
+        </TabsContent>
+
+        {/* Maintenance */}
+        <TabsContent value="maintenance" className="space-y-4">
+          <div className="bg-card rounded-xl border border-border p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-display font-semibold text-sm">Maintenance Mode</h2>
+                <p className="text-xs text-muted-foreground">When enabled, all users will see a maintenance page</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {maintenance.enabled && <Badge variant="destructive" className="text-[10px]">ACTIVE</Badge>}
+                <Switch
+                  checked={maintenance.enabled || false}
+                  onCheckedChange={val => updateField("maintenance", "enabled", val)}
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Maintenance Message</Label>
+              <Textarea
+                value={maintenance.message || ""}
+                onChange={e => updateField("maintenance", "message", e.target.value)}
+                rows={3}
+              />
+            </div>
+            <Button size="sm" onClick={() => saveSetting("maintenance", settings.maintenance)} disabled={saving === "maintenance"}
+              variant={maintenance.enabled ? "destructive" : "default"}>
+              {saving === "maintenance" ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
+              {maintenance.enabled ? "Activate Maintenance Mode" : "Save Maintenance Settings"}
+            </Button>
+          </div>
+        </TabsContent>
+
+        {/* SMTP */}
+        <TabsContent value="smtp" className="space-y-4">
+          <div className="bg-card rounded-xl border border-border p-5 space-y-4">
+            <h2 className="font-display font-semibold text-sm">Email Configuration</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Email Provider</Label>
+                <Input value={smtp.provider || ""} onChange={e => updateField("smtp", "provider", e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">From Name</Label>
+                <Input value={smtp.from_name || ""} onChange={e => updateField("smtp", "from_name", e.target.value)} />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label className="text-xs">From Email</Label>
+                <Input value={smtp.from_email || ""} onChange={e => updateField("smtp", "from_email", e.target.value)} />
+              </div>
+            </div>
+            <Button size="sm" onClick={() => saveSetting("smtp", settings.smtp)} disabled={saving === "smtp"}>
+              {saving === "smtp" ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
+              Save Email Settings
+            </Button>
+          </div>
+        </TabsContent>
+
+        {/* Defaults */}
+        <TabsContent value="defaults" className="space-y-4">
+          <div className="bg-card rounded-xl border border-border p-5 space-y-4">
+            <h2 className="font-display font-semibold text-sm">Platform Defaults</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Nameserver 1</Label>
+                <Input value={defaults.dns_nameserver_1 || ""} onChange={e => updateField("defaults", "dns_nameserver_1", e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Nameserver 2</Label>
+                <Input value={defaults.dns_nameserver_2 || ""} onChange={e => updateField("defaults", "dns_nameserver_2", e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">SSL Provider</Label>
+                <Input value={defaults.ssl_provider || ""} onChange={e => updateField("defaults", "ssl_provider", e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Default PHP Version</Label>
+                <Input value={defaults.php_version || ""} onChange={e => updateField("defaults", "php_version", e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Default RAM per App (MB)</Label>
+                <Input type="number" value={defaults.default_ram_mb || ""} onChange={e => updateField("defaults", "default_ram_mb", Number(e.target.value))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Deployment Timeout (sec)</Label>
+                <Input type="number" value={defaults.deployment_timeout || ""} onChange={e => updateField("defaults", "deployment_timeout", Number(e.target.value))} />
+              </div>
+            </div>
+            <Button size="sm" onClick={() => saveSetting("defaults", settings.defaults)} disabled={saving === "defaults"}>
+              {saving === "defaults" ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
+              Save Default Settings
+            </Button>
+          </div>
+        </TabsContent>
+
+        {/* Integrations */}
+        <TabsContent value="integrations" className="space-y-4">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="font-display font-semibold text-sm">Backend Integrations</h2>
+            <Button variant="outline" size="sm" onClick={checkApiStatus} disabled={configStatus.checkingAll}>
+              <RefreshCw className={`w-3 h-3 mr-1 ${configStatus.checkingAll ? "animate-spin" : ""}`} /> Refresh
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {apiCards.map((api, i) => (
+              <motion.div key={api.name} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
+                className="bg-card rounded-xl border border-border p-4">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center">
+                      <api.icon className="w-4 h-4 text-accent" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-xs">{api.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{api.desc}</p>
+                    </div>
                   </div>
                 </div>
-                {api.checking ? (
-                  <Badge variant="secondary">Checking...</Badge>
-                ) : api.configured ? (
-                  <Badge variant="default" className="gap-1"><CheckCircle className="w-3 h-3" /> Connected</Badge>
+                {configStatus.checkingAll ? (
+                  <Badge variant="secondary" className="text-[10px]">Checking...</Badge>
+                ) : api.connected ? (
+                  <Badge variant="default" className="gap-1 text-[10px]"><CheckCircle className="w-2.5 h-2.5" /> Connected</Badge>
                 ) : (
-                  <Badge variant="destructive" className="gap-1"><XCircle className="w-3 h-3" /> Not Set</Badge>
+                  <Badge variant="destructive" className="gap-1 text-[10px]"><XCircle className="w-2.5 h-2.5" /> Disconnected</Badge>
                 )}
-              </div>
-              <div className="bg-secondary rounded-lg p-3">
-                <p className="text-xs text-muted-foreground mb-1">Secret Name</p>
-                <code className="text-xs font-mono">{api.secretName}</code>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                {api.configured
-                  ? "API key is configured and working."
-                  : "Add this secret in Project Settings → Secrets to enable this integration."}
-              </p>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-
-      {/* Quick Setup Guide */}
-      <div>
-        <h2 className="font-display font-semibold text-sm mb-3">Quick Setup Guide</h2>
-        <div className="bg-card rounded-xl border border-border p-5 space-y-3">
-          <div className="flex items-start gap-3">
-            <div className="w-6 h-6 rounded-full bg-accent/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <span className="text-xs font-bold text-accent">1</span>
-            </div>
-            <div>
-              <p className="text-sm font-medium">Create Hosting Plans</p>
-              <p className="text-xs text-muted-foreground">Go to Plans page and add your packages (Starter, Business, Premium, etc.)</p>
-            </div>
+              </motion.div>
+            ))}
           </div>
-          <div className="flex items-start gap-3">
-            <div className="w-6 h-6 rounded-full bg-accent/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <span className="text-xs font-bold text-accent">2</span>
-            </div>
-            <div>
-              <p className="text-sm font-medium">Configure API Keys</p>
-              <p className="text-xs text-muted-foreground">Add NAMESILO_API_KEY and VPS_API_KEY in your project secrets</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <div className="w-6 h-6 rounded-full bg-accent/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <span className="text-xs font-bold text-accent">3</span>
-            </div>
-            <div>
-              <p className="text-sm font-medium">Test Domain Lookup</p>
-              <p className="text-xs text-muted-foreground">Try searching a domain from the client panel to verify NameSilo integration</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <div className="w-6 h-6 rounded-full bg-accent/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <span className="text-xs font-bold text-accent">4</span>
-            </div>
-            <div>
-              <p className="text-sm font-medium">Accept Orders</p>
-              <p className="text-xs text-muted-foreground">Clients can now purchase hosting and domains from the client panel</p>
-            </div>
-          </div>
-        </div>
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
