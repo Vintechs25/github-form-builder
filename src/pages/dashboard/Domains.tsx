@@ -42,7 +42,7 @@ const Domains = () => {
   useEffect(() => { fetchDomains(); }, [user]);
 
   const primaryDomain = hostingAccounts[0]?.domain || "";
-  const domainLimitCheck = canCreate(primaryDomain, "domain", domains.length);
+  const domainLimitCheck = canCreate("domain" as const, domains.length, primaryDomain);
 
   const handleCreate = async () => {
     if (!user || !domainName.trim()) return;
