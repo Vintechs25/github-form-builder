@@ -182,7 +182,9 @@ const SearchDomain = () => {
 
       {results.length > 0 && (
         <div className="space-y-3">
-          <h2 className="font-display font-semibold">Results</h2>
+          <h2 className="font-display font-semibold">
+            Results for "<span className="text-accent">{query.trim().replace(/\.[a-z.]+$/i, "")}</span>"
+          </h2>
           {results.map((r) => (
             <div
               key={r.domain}
