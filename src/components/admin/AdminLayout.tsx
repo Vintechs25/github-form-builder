@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, Outlet } from "react-router-dom";
 import {
   Users, Package, ShoppingBag, CreditCard, Globe, Server,
   HelpCircle, BarChart3, Settings, LogOut, Menu, X, Shield, Loader2, Home, DollarSign,
+  ScrollText, Tag, Zap, Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -13,6 +14,7 @@ const adminNav = [
   { icon: Home, label: "Dashboard", path: "/admin" },
   { icon: Users, label: "Users", path: "/admin/users" },
   { icon: Package, label: "Plans", path: "/admin/plans" },
+  { icon: Tag, label: "Coupons", path: "/admin/coupons" },
   { icon: Server, label: "Services", path: "/admin/services" },
   { icon: ShoppingBag, label: "Orders", path: "/admin/orders" },
   { icon: CreditCard, label: "Invoices", path: "/admin/invoices" },
@@ -20,6 +22,9 @@ const adminNav = [
   { icon: DollarSign, label: "Domain Pricing", path: "/admin/domain-pricing" },
   { icon: HelpCircle, label: "Tickets", path: "/admin/tickets" },
   { icon: BarChart3, label: "Reports", path: "/admin/reports" },
+  { icon: Activity, label: "Monitoring", path: "/admin/monitoring" },
+  { icon: ScrollText, label: "Audit Logs", path: "/admin/audit-logs" },
+  { icon: Zap, label: "Emergency", path: "/admin/emergency" },
   { icon: Settings, label: "Settings", path: "/admin/settings" },
 ];
 

@@ -11,13 +11,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { logAudit } from "@/lib/auditLog";
+
 interface PlanForm {
   name: string; slug: string; description: string; plan_type: string;
   price_monthly: string; price_yearly: string;
   storage_mb: string; bandwidth_mb: string;
   max_domains: string; max_email_accounts: string; max_databases: string;
   max_apps: string; ram_mb: string;
-  wordpress_enabled: boolean; is_active: boolean;
+  wordpress_enabled: boolean; is_active: boolean; is_recommended: boolean;
 }
 
 const empty: PlanForm = {
@@ -26,7 +28,7 @@ const empty: PlanForm = {
   storage_mb: "5120", bandwidth_mb: "51200",
   max_domains: "1", max_email_accounts: "5", max_databases: "1",
   max_apps: "0", ram_mb: "0",
-  wordpress_enabled: false, is_active: true,
+  wordpress_enabled: false, is_active: true, is_recommended: false,
 };
 
 const AdminPlans = () => {
@@ -57,7 +59,7 @@ const AdminPlans = () => {
       max_domains: String(p.max_domains), max_email_accounts: String(p.max_email_accounts),
       max_databases: String(p.max_databases), max_apps: String(p.max_apps || 0),
       ram_mb: String(p.ram_mb || 0),
-      wordpress_enabled: p.wordpress_enabled, is_active: p.is_active,
+      wordpress_enabled: p.wordpress_enabled, is_active: p.is_active, is_recommended: p.is_recommended || false,
     });
     setDialogOpen(true);
   };
@@ -65,7 +67,7 @@ const AdminPlans = () => {
   const handleSave = async () => {
     if (!form.name || !form.slug) { toast.error("Name and slug are required"); return; }
     setSaving(true);
-    const payload = {
+    const payload: any = {
       name: form.name, slug: form.slug, description: form.description || null,
       plan_type: form.plan_type,
       price_monthly: Number(form.price_monthly), price_yearly: form.price_yearly ? Number(form.price_yearly) : null,
@@ -73,16 +75,18 @@ const AdminPlans = () => {
       max_domains: Number(form.max_domains), max_email_accounts: Number(form.max_email_accounts),
       max_databases: Number(form.max_databases), max_apps: Number(form.max_apps),
       ram_mb: Number(form.ram_mb),
-      wordpress_enabled: form.wordpress_enabled, is_active: form.is_active,
+      wordpress_enabled: form.wordpress_enabled, is_active: form.is_active, is_recommended: form.is_recommended,
     };
 
     if (editId) {
       const { error } = await supabase.from("hosting_plans").update(payload).eq("id", editId);
       if (error) { toast.error(error.message); setSaving(false); return; }
+      logAudit("update_plan", "plan", editId, { name: form.name });
       toast.success("Plan updated");
     } else {
       const { error } = await supabase.from("hosting_plans").insert(payload);
       if (error) { toast.error(error.message); setSaving(false); return; }
+      logAudit("create_plan", "plan", undefined, { name: form.name });
       toast.success("Plan created");
     }
     setSaving(false);
@@ -147,7 +151,10 @@ const AdminPlans = () => {
               const tl = typeLabel(p.plan_type);
               return (
                 <TableRow key={p.id}>
-                  <TableCell className="font-medium">{p.name}</TableCell>
+                <TableCell className="font-medium">
+                  {p.name}
+                  {p.is_recommended && <Badge variant="default" className="ml-1.5 text-[10px]">⭐ Recommended</Badge>}
+                </TableCell>
                   <TableCell><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${tl.cls}`}>{tl.label}</span></TableCell>
                   <TableCell>KES {Number(p.price_monthly).toLocaleString()}</TableCell>
                   <TableCell>{p.max_domains}</TableCell>
@@ -224,6 +231,10 @@ const AdminPlans = () => {
               <div className="flex items-center gap-2">
                 <Switch checked={form.is_active} onCheckedChange={v => set("is_active", v)} />
                 <Label>Active</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={form.is_recommended} onCheckedChange={v => set("is_recommended", v)} />
+                <Label>Recommended</Label>
               </div>
             </div>
             <Button onClick={handleSave} disabled={saving} className="w-full">
