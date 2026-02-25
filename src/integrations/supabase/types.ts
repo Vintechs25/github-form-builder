@@ -150,6 +150,7 @@ export type Database = {
       }
       hosting_accounts: {
         Row: {
+          backend_id: string | null
           created_at: string
           domain: string
           hosting_type: string
@@ -162,6 +163,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          backend_id?: string | null
           created_at?: string
           domain: string
           hosting_type?: string
@@ -174,6 +176,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          backend_id?: string | null
           created_at?: string
           domain?: string
           hosting_type?: string
@@ -202,12 +205,15 @@ export type Database = {
           description: string | null
           id: string
           is_active: boolean
+          max_apps: number
           max_databases: number
           max_domains: number
           max_email_accounts: number
           name: string
+          plan_type: string
           price_monthly: number
           price_yearly: number | null
+          ram_mb: number
           slug: string
           storage_mb: number
           updated_at: string
@@ -219,12 +225,15 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          max_apps?: number
           max_databases?: number
           max_domains?: number
           max_email_accounts?: number
           name: string
+          plan_type?: string
           price_monthly?: number
           price_yearly?: number | null
+          ram_mb?: number
           slug: string
           storage_mb?: number
           updated_at?: string
@@ -236,12 +245,15 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          max_apps?: number
           max_databases?: number
           max_domains?: number
           max_email_accounts?: number
           name?: string
+          plan_type?: string
           price_monthly?: number
           price_yearly?: number | null
+          ram_mb?: number
           slug?: string
           storage_mb?: number
           updated_at?: string
@@ -351,33 +363,47 @@ export type Database = {
       }
       profiles: {
         Row: {
+          account_status: string
           created_at: string
           email: string | null
           first_name: string | null
           id: string
           last_name: string | null
+          plan_id: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          account_status?: string
           created_at?: string
           email?: string | null
           first_name?: string | null
           id?: string
           last_name?: string | null
+          plan_id?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          account_status?: string
           created_at?: string
           email?: string | null
           first_name?: string | null
           id?: string
           last_name?: string | null
+          plan_id?: string | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "hosting_plans"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       support_tickets: {
         Row: {

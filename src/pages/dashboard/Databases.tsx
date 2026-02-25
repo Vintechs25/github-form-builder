@@ -68,7 +68,7 @@ const Databases = () => {
     if (selectedDomain) fetchDatabases();
   }, [selectedDomain]);
 
-  const dbLimitCheck = canCreate(selectedDomain, "database", databases.length);
+  const dbLimitCheck = canCreate("database" as const, databases.length, selectedDomain);
 
   const handleCreate = async () => {
     if (!newDb.name || !newDb.username || !newDb.password) {

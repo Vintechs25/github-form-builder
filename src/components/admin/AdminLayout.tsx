@@ -59,7 +59,7 @@ const AdminLayout = () => {
               </div>
               <div>
                 <span className="font-display font-bold text-lg text-sidebar-foreground">Admin</span>
-                <p className="text-[10px] text-sidebar-foreground/50 -mt-1">WHMCS Panel</p>
+                <p className="text-[10px] text-sidebar-foreground/50 -mt-1">Control Panel</p>
               </div>
             </Link>
             <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-sidebar-foreground">

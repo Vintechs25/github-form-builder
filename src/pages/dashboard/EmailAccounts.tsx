@@ -86,7 +86,7 @@ const EmailAccounts = () => {
     if (selectedDomain) fetchEmails();
   }, [selectedDomain]);
 
-  const emailLimitCheck = canCreate(selectedDomain, "email", emails.length);
+  const emailLimitCheck = canCreate("email" as const, emails.length, selectedDomain);
 
   const handleCreate = async () => {
     if (!newEmail.username || !newEmail.password) {
