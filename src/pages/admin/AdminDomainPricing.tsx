@@ -65,10 +65,31 @@ const AdminDomainPricing = () => {
     setPricing((prev) => prev.map((p) => (p.id === id ? { ...p, is_enabled: enabled } : p)));
   };
 
+  const calcSellPrices = (p: TldPricing, overrides: Partial<TldPricing> = {}) => {
+    const type = overrides.markup_type ?? p.markup_type;
+    const pct = overrides.markup_percent ?? p.markup_percent;
+    const fixed = overrides.markup_fixed ?? p.markup_fixed;
+    if (type === "percent") {
+      return {
+        sell_price_register: +(p.register_price * (1 + pct / 100)).toFixed(2),
+        sell_price_renew: +(p.renew_price * (1 + pct / 100)).toFixed(2),
+        sell_price_transfer: +(p.transfer_price * (1 + pct / 100)).toFixed(2),
+      };
+    }
+    return {
+      sell_price_register: +(p.register_price + fixed).toFixed(2),
+      sell_price_renew: +(p.renew_price + fixed).toFixed(2),
+      sell_price_transfer: +(p.transfer_price + fixed).toFixed(2),
+    };
+  };
+
   const handleMarkupSave = async (id: string) => {
     const val = parseFloat(editingMarkup[id]);
     if (isNaN(val) || val < 0) { toast.error("Invalid markup"); return; }
-    const { error } = await supabase.from("domain_pricing").update({ markup_percent: val }).eq("id", id);
+    const p = pricing.find((x) => x.id === id);
+    if (!p) return;
+    const sell = calcSellPrices(p, { markup_percent: val });
+    const { error } = await supabase.from("domain_pricing").update({ markup_percent: val, ...sell }).eq("id", id);
     if (error) { toast.error("Failed to update"); return; }
     toast.success("Markup updated");
     setEditingMarkup((prev) => { const n = { ...prev }; delete n[id]; return n; });
@@ -78,7 +99,10 @@ const AdminDomainPricing = () => {
   const handleFixedSave = async (id: string) => {
     const val = parseFloat(editingFixed[id]);
     if (isNaN(val) || val < 0) { toast.error("Invalid amount"); return; }
-    const { error } = await supabase.from("domain_pricing").update({ markup_fixed: val }).eq("id", id);
+    const p = pricing.find((x) => x.id === id);
+    if (!p) return;
+    const sell = calcSellPrices(p, { markup_fixed: val });
+    const { error } = await supabase.from("domain_pricing").update({ markup_fixed: val, ...sell }).eq("id", id);
     if (error) { toast.error("Failed to update"); return; }
     toast.success("Fixed markup updated");
     setEditingFixed((prev) => { const n = { ...prev }; delete n[id]; return n; });
@@ -87,8 +111,11 @@ const AdminDomainPricing = () => {
 
   const handleTypeToggle = async (id: string, currentType: string) => {
     const newType = currentType === "percent" ? "fixed" : "percent";
-    await supabase.from("domain_pricing").update({ markup_type: newType }).eq("id", id);
-    setPricing((prev) => prev.map((p) => (p.id === id ? { ...p, markup_type: newType } : p)));
+    const p = pricing.find((x) => x.id === id);
+    if (!p) return;
+    const sell = calcSellPrices(p, { markup_type: newType });
+    await supabase.from("domain_pricing").update({ markup_type: newType, ...sell }).eq("id", id);
+    setPricing((prev) => prev.map((x) => (x.id === id ? { ...x, markup_type: newType, ...sell } : x)));
     fetchPricing();
   };
 
