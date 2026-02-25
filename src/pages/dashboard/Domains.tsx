@@ -169,6 +169,7 @@ const Domains = () => {
                 <TableHead>Type</TableHead>
                 <TableHead>Registrar</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>SSL</TableHead>
                 <TableHead>Nameservers</TableHead>
                 <TableHead>Expires</TableHead>
                 <TableHead className="w-16">DNS</TableHead>
@@ -182,6 +183,11 @@ const Domains = () => {
                   <TableCell className="text-sm capitalize">{d.registrar || "—"}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className={statusColor(d.status)}>{d.status}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={d.status === "active" ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}>
+                      {d.status === "active" ? "SSL Active" : "—"}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{d.nameserver_1 || "—"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
