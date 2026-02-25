@@ -4,11 +4,12 @@ import {
   Globe, Database, Mail, Shield, Settings, LogOut,
   Menu, X, Home, CreditCard, HelpCircle, Loader2,
   ShoppingBag, Search, BarChart3, Rocket, ChevronDown,
-  ChevronRight, ShieldCheck, Package,
+  ChevronRight, ShieldCheck, Package, Eye, XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useImpersonation } from "@/hooks/useImpersonation";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -62,22 +63,26 @@ const DashboardLayout = () => {
   const [loadingProfile, setLoadingProfile] = useState(true);
   const { user, signOut } = useAuth();
   const { isAdmin } = useUserRole();
+  const { impersonatedUser, isImpersonating, stopImpersonation, getEffectiveUserId } = useImpersonation();
   const navigate = useNavigate();
   const location = useLocation();
 
+  // When impersonating, load the impersonated user's profile instead
+  const effectiveUserId = getEffectiveUserId(user?.id);
+
   useEffect(() => {
     const fetchProfile = async () => {
-      if (!user) return;
+      if (!effectiveUserId) return;
       const { data, error } = await supabase
         .from("profiles")
         .select("first_name, last_name, email")
-        .eq("user_id", user.id)
+        .eq("user_id", effectiveUserId)
         .maybeSingle();
       if (!error && data) setProfile(data);
       setLoadingProfile(false);
     };
     fetchProfile();
-  }, [user]);
+  }, [effectiveUserId]);
 
   // Auto-expand services group if on a services route
   useEffect(() => {
@@ -245,6 +250,20 @@ const DashboardLayout = () => {
       {/* Main content */}
       <main className="flex-1 lg:ml-64">
         <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-lg border-b border-border">
+          {isImpersonating && impersonatedUser && (
+            <div className="bg-orange-500/10 border-b border-orange-500/20 px-4 py-2 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm">
+                <Eye className="w-4 h-4 text-orange-500" />
+                <span className="font-medium text-orange-600 dark:text-orange-400">
+                  Viewing as: {impersonatedUser.first_name} {impersonatedUser.last_name} ({impersonatedUser.email})
+                </span>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => { stopImpersonation(); navigate("/admin/users"); }}
+                className="text-orange-600 hover:text-orange-700 hover:bg-orange-500/10 gap-1.5">
+                <XCircle className="w-3.5 h-3.5" /> Exit Impersonation
+              </Button>
+            </div>
+          )}
           <div className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-3">
               <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 rounded-lg hover:bg-secondary">
@@ -255,7 +274,7 @@ const DashboardLayout = () => {
         </header>
 
         <div className="p-4 md:p-6 lg:p-8">
-          <Outlet context={{ profile, user }} />
+          <Outlet context={{ profile, user: isImpersonating ? { ...user, id: impersonatedUser?.user_id } : user }} />
         </div>
       </main>
     </div>
