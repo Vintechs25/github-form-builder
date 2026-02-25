@@ -80,14 +80,14 @@ const SearchDomain = () => {
           return {
             domain,
             available: data.data.available || false,
-            price: prices.register ?? (data.data.price || null),
-            renewPrice: prices.renew,
+            price: (prices.register && prices.register > 0) ? prices.register : (data.data.price || null),
+            renewPrice: (prices.renew && prices.renew > 0) ? prices.renew : null,
           };
         }
-        return { domain, available: false, price: prices.register, renewPrice: prices.renew };
+        return { domain, available: false, price: (prices.register && prices.register > 0) ? prices.register : null, renewPrice: (prices.renew && prices.renew > 0) ? prices.renew : null };
       } catch {
         const prices = getTldPrice(domain);
-        return { domain, available: false, price: prices.register, renewPrice: prices.renew };
+        return { domain, available: false, price: (prices.register && prices.register > 0) ? prices.register : null, renewPrice: (prices.renew && prices.renew > 0) ? prices.renew : null };
       }
     };
 
@@ -114,6 +114,11 @@ const SearchDomain = () => {
     setRegistering(domain);
     try {
       const price = results.find((r) => r.domain === domain)?.price || 0;
+      if (!price || price <= 0) {
+        toast.error("Unable to determine domain price. Please try searching again.");
+        setRegistering(null);
+        return;
+      }
       const { data: order, error } = await supabase.from("orders").insert({
         user_id: user.id,
         type: "domain",
