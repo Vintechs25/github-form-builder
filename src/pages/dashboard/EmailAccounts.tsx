@@ -2,9 +2,10 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Mail, Plus, Trash2, Key, Loader2, RefreshCw, ExternalLink,
-  Copy, Eye, EyeOff, AlertCircle,
+  Copy, Eye, EyeOff, AlertCircle, Forward, HardDrive,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -42,6 +43,10 @@ const EmailAccounts = () => {
   const [pwEmail, setPwEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newEmail, setNewEmail] = useState({ username: "", password: "" });
+  const [forwarderOpen, setForwarderOpen] = useState(false);
+  const [forwarderFrom, setForwarderFrom] = useState("");
+  const [forwarderTo, setForwarderTo] = useState("");
+  const [creatingForwarder, setCreatingForwarder] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -331,6 +336,84 @@ const EmailAccounts = () => {
                 </Table>
               </div>
             </motion.div>
+          )}
+
+          {/* Email forwarders */}
+          <div className="bg-card rounded-xl border border-border p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+                  <Forward className="w-5 h-5 text-accent" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">Email Forwarders</h3>
+                  <p className="text-sm text-muted-foreground">Forward emails to another address</p>
+                </div>
+              </div>
+              <Dialog open={forwarderOpen} onOpenChange={setForwarderOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm"><Plus className="w-4 h-4 mr-1" /> Add Forwarder</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Create Email Forwarder</DialogTitle>
+                    <DialogDescription>Forward emails from one address to another</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Forward From</Label>
+                      <div className="flex items-center gap-2">
+                        <Input placeholder="info" value={forwarderFrom} onChange={(e) => setForwarderFrom(e.target.value)} />
+                        <span className="text-sm text-muted-foreground whitespace-nowrap">@{selectedDomain}</span>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Forward To</Label>
+                      <Input placeholder="user@example.com" value={forwarderTo} onChange={(e) => setForwarderTo(e.target.value)} />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setForwarderOpen(false)}>Cancel</Button>
+                    <Button variant="accent" disabled={creatingForwarder || !forwarderFrom || !forwarderTo} onClick={() => {
+                      toast.info("Email forwarders will be available soon.");
+                      setForwarderOpen(false);
+                    }}>
+                      Create Forwarder
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+
+          {/* Mailbox storage usage */}
+          {emails.length > 0 && (
+            <div className="bg-card rounded-xl border border-border p-5 space-y-3">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+                  <HardDrive className="w-5 h-5 text-accent" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">Mailbox Storage</h3>
+                  <p className="text-sm text-muted-foreground">Storage usage per mailbox</p>
+                </div>
+              </div>
+              {emails.map((email: any, i: number) => {
+                const emailAddr = typeof email === "string" ? email : email.email || email.userName;
+                const usageMb = typeof email === "object" ? (email.diskUsed || email.quota_used || 0) : 0;
+                const limitMb = typeof email === "object" ? (email.diskLimit || email.quota || 1024) : 1024;
+                const percent = limitMb > 0 ? Math.min(Math.round((usageMb / limitMb) * 100), 100) : 0;
+                return (
+                  <div key={i} className="space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">{emailAddr}</span>
+                      <span className="font-medium">{usageMb} MB / {limitMb} MB</span>
+                    </div>
+                    <Progress value={percent} className="h-1.5" />
+                  </div>
+                );
+              })}
+            </div>
           )}
 
           {/* Webmail link */}

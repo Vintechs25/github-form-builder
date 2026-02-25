@@ -22,6 +22,7 @@ const Overview = () => {
   const { accounts, userPlan, canCreate } = usePlanLimits(user?.id);
   const [hostingAccounts, setHostingAccounts] = useState<any[]>([]);
   const [apps, setApps] = useState<any[]>([]);
+  const [renewalDate, setRenewalDate] = useState<string | null>(null);
   const [stats, setStats] = useState({
     websites: 0, applications: 0, pendingDns: 0, storageMb: 0, tickets: 0,
     databases: 0, emails: 0,
@@ -32,13 +33,24 @@ const Overview = () => {
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      const [{ data: accts }, { data: tickets }] = await Promise.all([
+      const [{ data: accts }, { data: tickets }, { data: orders }] = await Promise.all([
         supabase.from("hosting_accounts").select("*, hosting_plans(*)").eq("user_id", user.id),
         supabase.from("support_tickets").select("id").eq("user_id", user.id).in("status", ["open", "in_progress"]),
+        supabase.from("orders").select("created_at, billing_cycle, status").eq("user_id", user.id).eq("status", "active").order("created_at", { ascending: false }).limit(1),
       ]);
 
       const all = accts || [];
       setHostingAccounts(all);
+
+      // Calculate renewal date from most recent active order
+      if (orders && orders.length > 0) {
+        const order = orders[0];
+        const created = new Date(order.created_at);
+        const months = order.billing_cycle === "yearly" ? 12 : 1;
+        const renewal = new Date(created);
+        renewal.setMonth(renewal.getMonth() + months);
+        setRenewalDate(renewal.toLocaleDateString());
+      }
 
       try {
         const appsRes = await coolify.listApps();
@@ -166,7 +178,7 @@ const Overview = () => {
           { label: "Databases", value: stats.databases?.toString() || "0", icon: Database, color: "text-accent" },
           { label: "Emails", value: stats.emails?.toString() || "0", icon: Mail, color: "text-accent" },
           { label: "Current Plan", value: plan?.name || "None", icon: Zap, color: "text-accent" },
-          { label: "Storage Used", value: formatMb(stats.storageMb), icon: HardDrive, color: "text-accent" },
+          { label: "Renewal Date", value: renewalDate || "—", icon: Clock, color: "text-accent" },
         ].map((stat, i) => (
           <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} className="bg-card rounded-xl border border-border p-5">
             <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center mb-3">

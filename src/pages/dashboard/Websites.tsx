@@ -424,10 +424,11 @@ const Websites = () => {
                           <ExternalLink className="w-3 h-3 mr-1" /> Visit Site
                         </Button>
                       </a>
-                      <Button variant="accent" size="sm" className="flex-1" onClick={() => toggleExpand(account.id)}>
-                        {isExpanded ? <ChevronUp className="w-4 h-4 mr-1" /> : <ChevronDown className="w-4 h-4 mr-1" />}
-                        {isExpanded ? "Hide" : "Manage"}
-                      </Button>
+                      <Link to={`/dashboard/websites/${account.id}`}>
+                        <Button variant="accent" size="sm" className="flex-1 w-full">
+                          Manage
+                        </Button>
+                      </Link>
                     </div>
                   )}
                 </div>

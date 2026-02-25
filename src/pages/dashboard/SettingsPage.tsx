@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { Settings, Save, KeyRound, Trash2, Loader2, AlertTriangle } from "lucide-react";
+import { Settings, Save, KeyRound, Trash2, Loader2, AlertTriangle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useOutletContext, useNavigate } from "react-router-dom";
@@ -125,6 +126,23 @@ const SettingsPage = () => {
           {changingPw ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <KeyRound className="w-4 h-4 mr-1" />}
           {changingPw ? "Changing..." : "Change Password"}
         </Button>
+      </div>
+
+      {/* Two-Factor Authentication */}
+      <div className="bg-card rounded-xl border border-border p-6 max-w-lg space-y-4">
+        <h3 className="font-semibold flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-accent" /> Two-Factor Authentication
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          Add an extra layer of security to your account. When enabled, you'll need to enter a code from your authenticator app when signing in.
+        </p>
+        <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 border border-border">
+          <div>
+            <p className="text-sm font-medium">Authenticator App</p>
+            <p className="text-xs text-muted-foreground">Use Google Authenticator, Authy, or similar</p>
+          </div>
+          <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">Coming Soon</Badge>
+        </div>
       </div>
 
       {/* Danger Zone */}

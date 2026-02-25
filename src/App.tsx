@@ -30,6 +30,7 @@ import DnsManager from "./pages/dashboard/DnsManager";
 import Orders from "./pages/dashboard/Orders";
 import PaymentCallback from "./pages/dashboard/PaymentCallback";
 import Checkout from "./pages/dashboard/Checkout";
+import WebsiteDetail from "./pages/dashboard/WebsiteDetail";
 
 import AdminRoute from "./components/admin/AdminRoute";
 import AdminLayout from "./components/admin/AdminLayout";
@@ -90,6 +91,7 @@ const App = () => (
               <Route path="orders" element={<Orders />} />
               <Route path="payment-callback" element={<PaymentCallback />} />
               <Route path="checkout" element={<Checkout />} />
+              <Route path="websites/:id" element={<WebsiteDetail />} />
               
             </Route>
             <Route
