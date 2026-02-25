@@ -24,6 +24,7 @@ const Overview = () => {
   const [apps, setApps] = useState<any[]>([]);
   const [stats, setStats] = useState({
     websites: 0, applications: 0, pendingDns: 0, storageMb: 0, tickets: 0,
+    databases: 0, emails: 0,
   });
 
   const plan = userPlan || (accounts.length > 0 ? (accounts[0] as any).hosting_plans : null);
@@ -50,6 +51,8 @@ const Overview = () => {
         pendingDns: all.filter(a => a.status === "pending_dns").length,
         storageMb: all.reduce((s, a) => s + (a.storage_used_mb || 0), 0),
         tickets: tickets?.length || 0,
+        databases: 0,
+        emails: 0,
       });
     };
     load();
@@ -156,11 +159,13 @@ const Overview = () => {
       </motion.div>
 
       {/* Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
-          { label: "Active Services", value: `${runningServices}/${totalServices}`, icon: Zap, color: "text-accent" },
           { label: "Websites", value: stats.websites.toString(), icon: Globe, color: "text-accent" },
           { label: "Applications", value: apps.length.toString(), icon: Rocket, color: "text-accent" },
+          { label: "Databases", value: stats.databases?.toString() || "0", icon: Database, color: "text-accent" },
+          { label: "Emails", value: stats.emails?.toString() || "0", icon: Mail, color: "text-accent" },
+          { label: "Current Plan", value: plan?.name || "None", icon: Zap, color: "text-accent" },
           { label: "Storage Used", value: formatMb(stats.storageMb), icon: HardDrive, color: "text-accent" },
         ].map((stat, i) => (
           <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} className="bg-card rounded-xl border border-border p-5">

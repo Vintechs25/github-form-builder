@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { CreditCard, Download, Loader2 } from "lucide-react";
-import { useOutletContext } from "react-router-dom";
+import { CreditCard, Download, Loader2, ArrowUpCircle } from "lucide-react";
+import { useOutletContext, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -178,9 +178,16 @@ const Billing = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display font-semibold text-lg">Billing</h1>
-        <p className="text-sm text-muted-foreground">View invoices and payment history</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-display font-semibold text-lg">Billing</h1>
+          <p className="text-sm text-muted-foreground">View invoices, payment history, and manage your subscription</p>
+        </div>
+        <Link to="/dashboard/buy-hosting">
+          <Button variant="outline" size="sm">
+            <ArrowUpCircle className="w-4 h-4 mr-1" /> Upgrade Plan
+          </Button>
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
