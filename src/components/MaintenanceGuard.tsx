@@ -31,6 +31,30 @@ const MaintenanceGuard = ({ children }: MaintenanceGuardProps) => {
     };
 
     fetchMaintenance();
+
+    // Subscribe to realtime changes on platform_settings
+    const channel = supabase
+      .channel("maintenance-mode")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "platform_settings",
+          filter: "key=eq.maintenance",
+        },
+        (payload) => {
+          const val = payload.new?.value;
+          if (val && typeof val === "object" && !Array.isArray(val)) {
+            setMaintenance(val as { enabled: boolean; message: string });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const loading = checking || authLoading || (user ? roleLoading : false);
