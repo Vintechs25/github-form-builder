@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveApiKey } from "../_shared/resolveApiKey.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -207,7 +208,7 @@ serve(async (req) => {
 
     // ─── DOMAIN ORDER ───────────────────────────────────────────────
     if (order.type === "domain") {
-      const NAMESILO_API_KEY = Deno.env.get("NAMESILO_API_KEY");
+      const NAMESILO_API_KEY = await resolveApiKey("namesilo-api", "NAMESILO_API_KEY", "NAMESILO_API_KEY");
 
       if (!NAMESILO_API_KEY) {
         console.error("[process-order] NAMESILO_API_KEY not configured");

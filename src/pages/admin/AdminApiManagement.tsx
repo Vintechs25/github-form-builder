@@ -17,7 +17,7 @@ import {
   Settings2, Power, PowerOff, Activity, RefreshCw, Search,
   Shield, Zap, Globe, CreditCard, Server, Bell, Clock, BarChart3,
   ChevronRight, AlertTriangle, CheckCircle2, XCircle, Loader2, Eye,
-  HeartPulse, Wifi, WifiOff,
+  HeartPulse, Wifi, WifiOff, Key,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
@@ -51,6 +51,18 @@ interface ApiLog {
   performed_by: string | null;
   created_at: string;
 }
+
+// API-to-secrets mapping
+const API_SECRETS_MAP: Record<string, { label: string; secretKey: string }[]> = {
+  "coolify-api": [{ label: "Coolify API Token", secretKey: "COOLIFY_API_TOKEN" }],
+  "paystack": [{ label: "Paystack Secret Key", secretKey: "PAYSTACK_SECRET_KEY" }],
+  "namesilo-api": [{ label: "NameSilo API Key", secretKey: "NAMESILO_API_KEY" }],
+  "send-notification-email": [{ label: "Resend API Key", secretKey: "RESEND_API_KEY" }],
+  "vps-api": [
+    { label: "CyberPanel Username", secretKey: "CYBERPANEL_USER" },
+    { label: "CyberPanel Password", secretKey: "CYBERPANEL_PASS" },
+  ],
+};
 
 const categoryIcons: Record<string, React.ElementType> = {
   deployment: Zap,
@@ -92,9 +104,12 @@ const AdminApiManagement = () => {
   const [editRate, setEditRate] = useState(60);
   const [editTimeout, setEditTimeout] = useState(30);
   const [editRetry, setEditRetry] = useState(3);
-  const [editBaseUrl, setEditBaseUrl] = useState("");
   const [editHealthUrl, setEditHealthUrl] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // API key fields
+  const [apiKeyValues, setApiKeyValues] = useState<Record<string, string>>({});
+  const [savingKey, setSavingKey] = useState<string | null>(null);
 
   const fetchApis = async () => {
     const { data, error } = await supabase
@@ -179,8 +194,8 @@ const AdminApiManagement = () => {
     setEditRate(api.rate_limit_per_minute || 60);
     setEditTimeout(api.timeout_seconds || 30);
     setEditRetry(api.retry_count || 3);
-    setEditBaseUrl(api.base_url || "");
     setEditHealthUrl(api.health_check_url || "");
+    setApiKeyValues({});
     setConfigOpen(true);
   };
 
@@ -193,7 +208,6 @@ const AdminApiManagement = () => {
         rate_limit_per_minute: editRate,
         timeout_seconds: editTimeout,
         retry_count: editRetry,
-        base_url: editBaseUrl || null,
         health_check_url: editHealthUrl || null,
         updated_at: new Date().toISOString(),
         updated_by: user?.id,
@@ -212,6 +226,48 @@ const AdminApiManagement = () => {
       setConfigOpen(false);
     }
     setSaving(false);
+  };
+
+  const saveApiKey = async (apiName: string, secretKey: string) => {
+    const value = apiKeyValues[secretKey];
+    if (!value?.trim()) {
+      toast.error("Please enter a value");
+      return;
+    }
+    setSavingKey(secretKey);
+    try {
+      // Store the API key in the config jsonb column
+      const api = apis.find(a => a.api_name === apiName);
+      if (!api) throw new Error("API not found");
+
+      const currentConfig = (api.config || {}) as Record<string, unknown>;
+      const updatedConfig = { ...currentConfig, [secretKey]: value.trim() };
+
+      const { error } = await supabase
+        .from("api_configurations")
+        .update({
+          config: updatedConfig as any,
+          updated_at: new Date().toISOString(),
+          updated_by: user?.id,
+        })
+        .eq("id", api.id);
+
+      if (error) throw error;
+
+      toast.success(`${secretKey} updated successfully`);
+      await logActivity(apiName, "api_key_updated", "success", { secret_key: secretKey });
+      setApiKeyValues(prev => ({ ...prev, [secretKey]: "" }));
+      fetchApis();
+      fetchLogs();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update API key");
+    }
+    setSavingKey(null);
+  };
+
+  const isKeyConfigured = (api: ApiConfig, secretKey: string): boolean => {
+    const config = api.config as Record<string, unknown>;
+    return !!(config && config[secretKey]);
   };
 
   const openApiLogs = (api: ApiConfig) => {
@@ -244,6 +300,14 @@ const AdminApiManagement = () => {
     toast.success(`${targets.length} APIs ${enable ? "enabled" : "disabled"}`);
     fetchApis();
     fetchLogs();
+  };
+
+  // Helper to get key status for an API
+  const getApiKeyStatus = (api: ApiConfig): "configured" | "missing" | "none" => {
+    const secrets = API_SECRETS_MAP[api.api_name];
+    if (!secrets) return "none";
+    const allConfigured = secrets.every(s => isKeyConfigured(api, s.secretKey));
+    return allConfigured ? "configured" : "missing";
   };
 
   if (loading) {
@@ -370,6 +434,7 @@ const AdminApiManagement = () => {
             {filteredApis.map((api) => {
               const Icon = categoryIcons[api.category] || Settings2;
               const colorCls = categoryColors[api.category] || categoryColors.general;
+              const keyStatus = getApiKeyStatus(api);
               return (
                 <Card key={api.id} className={`transition-all ${!api.is_enabled ? "opacity-60" : ""}`}>
                   <CardContent className="p-5 space-y-4">
@@ -415,6 +480,13 @@ const AdminApiManagement = () => {
                       {api.rate_limit_per_minute && (
                         <Badge variant="outline" className="text-[10px]">{api.rate_limit_per_minute} req/min</Badge>
                       )}
+                      {/* API Key indicator */}
+                      {keyStatus !== "none" && (
+                        <Badge variant="outline" className={`text-[10px] gap-1 ${keyStatus === "configured" ? "bg-green-500/10 text-green-600 border-green-500/20" : "bg-red-500/10 text-red-500 border-red-500/20"}`}>
+                          <Key className="w-3 h-3" />
+                          {keyStatus === "configured" ? "Key Set" : "Key Missing"}
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex gap-2 pt-1">
                       <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={() => runHealthCheck(api.api_name)} disabled={checkingHealth !== null}>
@@ -445,6 +517,7 @@ const AdminApiManagement = () => {
                 <TableRow>
                   <TableHead>API</TableHead>
                   <TableHead>Category</TableHead>
+                  <TableHead>API Key</TableHead>
                   <TableHead>Health</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Rate Limit</TableHead>
@@ -456,6 +529,7 @@ const AdminApiManagement = () => {
               <TableBody>
                 {filteredApis.map((api) => {
                   const colorCls = categoryColors[api.category] || categoryColors.general;
+                  const keyStatus = getApiKeyStatus(api);
                   return (
                     <TableRow key={api.id} className={!api.is_enabled ? "opacity-60" : ""}>
                       <TableCell>
@@ -466,6 +540,21 @@ const AdminApiManagement = () => {
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className={`capitalize text-[10px] ${colorCls}`}>{api.category}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        {keyStatus === "none" ? (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        ) : keyStatus === "configured" ? (
+                          <div className="flex items-center gap-1.5">
+                            <Key className="w-3.5 h-3.5 text-green-500" />
+                            <span className="text-xs text-green-600 font-medium">Set</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <Key className="w-3.5 h-3.5 text-red-500" />
+                            <span className="text-xs text-red-500 font-medium">Missing</span>
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         {(() => {
@@ -542,28 +631,79 @@ const AdminApiManagement = () => {
 
       {/* Configure Dialog */}
       <Dialog open={configOpen} onOpenChange={setConfigOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Configure {selectedApi?.display_name}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <Label className="text-xs">Rate Limit (req/min)</Label>
-                <Input type="number" value={editRate} onChange={(e) => setEditRate(Number(e.target.value))} />
+            {/* API Key Section */}
+            {selectedApi && API_SECRETS_MAP[selectedApi.api_name] ? (
+              <div className="space-y-3">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">API Keys / Secrets</Label>
+                {API_SECRETS_MAP[selectedApi.api_name].map((secret) => {
+                  const configured = isKeyConfigured(selectedApi, secret.secretKey);
+                  return (
+                    <div key={secret.secretKey} className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs">{secret.label}</Label>
+                        <div className="flex items-center gap-1.5">
+                          {configured ? (
+                            <>
+                              <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                              <span className="text-[10px] text-green-600 font-medium">Configured</span>
+                            </>
+                          ) : (
+                            <>
+                              <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
+                              <span className="text-[10px] text-red-500 font-medium">Not set</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Input
+                          type="password"
+                          placeholder={configured ? "••••••••••••" : `Enter ${secret.label}`}
+                          value={apiKeyValues[secret.secretKey] || ""}
+                          onChange={(e) => setApiKeyValues(prev => ({ ...prev, [secret.secretKey]: e.target.value }))}
+                          className="font-mono text-xs"
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={savingKey === secret.secretKey || !apiKeyValues[secret.secretKey]?.trim()}
+                          onClick={() => saveApiKey(selectedApi.api_name, secret.secretKey)}
+                        >
+                          {savingKey === secret.secretKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Key className="w-3.5 h-3.5" />}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <div>
-                <Label className="text-xs">Timeout (seconds)</Label>
-                <Input type="number" value={editTimeout} onChange={(e) => setEditTimeout(Number(e.target.value))} />
+            ) : selectedApi ? (
+              <div className="bg-muted/50 rounded-lg p-3 flex items-center gap-2">
+                <Shield className="w-4 h-4 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">No external API key required — uses internal authentication.</span>
               </div>
-              <div>
-                <Label className="text-xs">Retry Count</Label>
-                <Input type="number" value={editRetry} onChange={(e) => setEditRetry(Number(e.target.value))} />
+            ) : null}
+
+            <div className="border-t pt-4">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 block">Settings</Label>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-xs">Rate Limit (req/min)</Label>
+                  <Input type="number" value={editRate} onChange={(e) => setEditRate(Number(e.target.value))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Timeout (seconds)</Label>
+                  <Input type="number" value={editTimeout} onChange={(e) => setEditTimeout(Number(e.target.value))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Retry Count</Label>
+                  <Input type="number" value={editRetry} onChange={(e) => setEditRetry(Number(e.target.value))} />
+                </div>
               </div>
-            </div>
-            <div>
-              <Label className="text-xs">Base URL</Label>
-              <Input placeholder="https://api.example.com" value={editBaseUrl} onChange={(e) => setEditBaseUrl(e.target.value)} />
             </div>
             <div>
               <Label className="text-xs">Health Check URL</Label>
