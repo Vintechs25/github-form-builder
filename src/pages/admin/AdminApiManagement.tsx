@@ -17,7 +17,9 @@ import {
   Settings2, Power, PowerOff, Activity, RefreshCw, Search,
   Shield, Zap, Globe, CreditCard, Server, Bell, Clock, BarChart3,
   ChevronRight, AlertTriangle, CheckCircle2, XCircle, Loader2, Eye,
+  HeartPulse, Wifi, WifiOff,
 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
 
 interface ApiConfig {
@@ -83,6 +85,8 @@ const AdminApiManagement = () => {
   const [configOpen, setConfigOpen] = useState(false);
   const [logsOpen, setLogsOpen] = useState(false);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [checkingHealth, setCheckingHealth] = useState<string | null>(null);
+  const [healthResults, setHealthResults] = useState<Record<string, { status: string; message: string; response_time_ms: number }>>({});
 
   // Editable fields for config dialog
   const [editRate, setEditRate] = useState(60);
@@ -112,10 +116,34 @@ const AdminApiManagement = () => {
     if (data) setLogs(data as unknown as ApiLog[]);
   };
 
+  const runHealthCheck = async (apiName?: string) => {
+    setCheckingHealth(apiName || "all");
+    try {
+      const { data, error } = await supabase.functions.invoke("health-check", {
+        body: apiName ? { api_name: apiName } : {},
+      });
+      if (error) throw new Error(error.message);
+      if (data?.results) {
+        const newResults: Record<string, { status: string; message: string; response_time_ms: number }> = {};
+        for (const r of data.results) {
+          newResults[r.api_name] = { status: r.status, message: r.message, response_time_ms: r.response_time_ms || 0 };
+        }
+        setHealthResults((prev) => ({ ...prev, ...newResults }));
+        await logActivity(apiName || "all", "health_check", "success", { results: data.results });
+        toast.success(apiName ? `Health check complete for ${apiName}` : `Health check complete for ${data.results.length} APIs`);
+      }
+      fetchApis();
+    } catch (err: any) {
+      toast.error(err.message || "Health check failed");
+    }
+    setCheckingHealth(null);
+  };
+
   useEffect(() => {
     fetchApis();
     fetchLogs();
   }, []);
+
 
   const logActivity = async (apiName: string, action: string, status: string, details?: Record<string, unknown>) => {
     await supabase.from("api_activity_logs").insert([{
@@ -234,7 +262,11 @@ const AdminApiManagement = () => {
           <h1 className="text-2xl font-bold">API Management</h1>
           <p className="text-muted-foreground text-sm">Central control for all platform API endpoints</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={() => runHealthCheck()} disabled={checkingHealth !== null}>
+            {checkingHealth === "all" ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <HeartPulse className="w-4 h-4 mr-1" />}
+            Health Check All
+          </Button>
           <Button variant="outline" size="sm" onClick={() => bulkToggle(true)}>
             <Power className="w-4 h-4 mr-1" /> Enable All
           </Button>
@@ -291,12 +323,12 @@ const AdminApiManagement = () => {
         <Card>
           <CardContent className="pt-4 pb-3 px-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                <Activity className="w-5 h-5 text-amber-500" />
+              <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                <HeartPulse className="w-5 h-5 text-emerald-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{categories.length}</p>
-                <p className="text-xs text-muted-foreground">Categories</p>
+                <p className="text-2xl font-bold">{apis.filter(a => a.health_status === "healthy").length}/{apis.filter(a => a.health_status).length}</p>
+                <p className="text-xs text-muted-foreground">Healthy</p>
               </div>
             </div>
           </CardContent>
@@ -358,6 +390,21 @@ const AdminApiManagement = () => {
                       />
                     </div>
                     <p className="text-xs text-muted-foreground line-clamp-2">{api.description}</p>
+                    {/* Health Status */}
+                    {(api.health_status || healthResults[api.api_name]) && (() => {
+                      const hr = healthResults[api.api_name];
+                      const hs = hr?.status || api.health_status;
+                      const isHealthy = hs === "healthy";
+                      const isDown = hs === "down";
+                      return (
+                        <div className={`flex items-center gap-2 p-2 rounded-md text-xs ${isHealthy ? "bg-green-500/10" : isDown ? "bg-destructive/10" : "bg-amber-500/10"}`}>
+                          {isHealthy ? <Wifi className="w-3.5 h-3.5 text-green-500" /> : isDown ? <WifiOff className="w-3.5 h-3.5 text-destructive" /> : <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />}
+                          <span className={`font-medium capitalize ${isHealthy ? "text-green-600" : isDown ? "text-destructive" : "text-amber-600"}`}>{hs}</span>
+                          {hr?.response_time_ms ? <span className="text-muted-foreground ml-auto">{hr.response_time_ms}ms</span> : null}
+                          {api.last_health_check && !hr && <span className="text-muted-foreground ml-auto">{format(new Date(api.last_health_check), "HH:mm")}</span>}
+                        </div>
+                      );
+                    })()}
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge variant="outline" className={`text-[10px] capitalize ${colorCls}`}>{api.category}</Badge>
                       {api.is_enabled ? (
@@ -370,6 +417,9 @@ const AdminApiManagement = () => {
                       )}
                     </div>
                     <div className="flex gap-2 pt-1">
+                      <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={() => runHealthCheck(api.api_name)} disabled={checkingHealth !== null}>
+                        {checkingHealth === api.api_name ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <HeartPulse className="w-3.5 h-3.5 mr-1" />} Ping
+                      </Button>
                       <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={() => openConfig(api)}>
                         <Settings2 className="w-3.5 h-3.5 mr-1" /> Configure
                       </Button>
@@ -395,6 +445,7 @@ const AdminApiManagement = () => {
                 <TableRow>
                   <TableHead>API</TableHead>
                   <TableHead>Category</TableHead>
+                  <TableHead>Health</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Rate Limit</TableHead>
                   <TableHead>Timeout</TableHead>
@@ -415,6 +466,22 @@ const AdminApiManagement = () => {
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className={`capitalize text-[10px] ${colorCls}`}>{api.category}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const hr = healthResults[api.api_name];
+                          const hs = hr?.status || api.health_status;
+                          if (!hs) return <span className="text-xs text-muted-foreground">—</span>;
+                          const isHealthy = hs === "healthy";
+                          const isDown = hs === "down";
+                          return (
+                            <div className="flex items-center gap-1.5">
+                              {isHealthy ? <Wifi className="w-3.5 h-3.5 text-green-500" /> : isDown ? <WifiOff className="w-3.5 h-3.5 text-destructive" /> : <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />}
+                              <span className={`text-xs font-medium capitalize ${isHealthy ? "text-green-600" : isDown ? "text-destructive" : "text-amber-600"}`}>{hs}</span>
+                              {hr?.response_time_ms ? <span className="text-[10px] text-muted-foreground">({hr.response_time_ms}ms)</span> : null}
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         <Switch checked={api.is_enabled} disabled={toggling === api.id} onCheckedChange={() => toggleApi(api)} />
