@@ -18,22 +18,24 @@ Deno.serve(async (req) => {
 
     const { api_name } = await req.json().catch(() => ({}));
 
-    // Fetch APIs to check – either one specific or all with health_check_url
+    // Internal edge functions that have no external health check URL
+    // We'll ping their edge function endpoint with OPTIONS to verify they're deployed
+    const INTERNAL_FUNCTIONS = ["admin-actions", "check-expiring", "auto-suspend", "process-order"];
+
+    // Fetch APIs to check – either one specific or all
     let query = supabase
       .from("api_configurations")
       .select("id, api_name, display_name, health_check_url, is_enabled");
 
     if (api_name) {
       query = query.eq("api_name", api_name);
-    } else {
-      query = query.not("health_check_url", "is", null);
     }
 
     const { data: apis, error: fetchErr } = await query;
     if (fetchErr) throw fetchErr;
     if (!apis || apis.length === 0) {
       return new Response(
-        JSON.stringify({ results: [], message: "No APIs with health check URLs found" }),
+        JSON.stringify({ results: [], message: "No APIs found" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -41,9 +43,18 @@ Deno.serve(async (req) => {
     const results = [];
 
     for (const api of apis) {
-      if (!api.health_check_url) {
+      // Determine the URL to check
+      let checkUrl = api.health_check_url;
+
+      // For internal edge functions without a health URL, ping the function endpoint
+      if (!checkUrl && INTERNAL_FUNCTIONS.includes(api.api_name)) {
+        checkUrl = `${supabaseUrl}/functions/v1/${api.api_name}`;
+      }
+
+      if (!checkUrl) {
         results.push({
           api_name: api.api_name,
+          display_name: api.display_name,
           status: "no_url",
           message: "No health check URL configured",
         });
@@ -60,9 +71,12 @@ Deno.serve(async (req) => {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
 
-        const res = await fetch(api.health_check_url, {
+        const res = await fetch(checkUrl, {
           method: "GET",
           signal: controller.signal,
+          headers: INTERNAL_FUNCTIONS.includes(api.api_name)
+            ? { Authorization: `Bearer ${serviceKey}`, apikey: serviceKey }
+            : {},
         });
         clearTimeout(timeout);
 
