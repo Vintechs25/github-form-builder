@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "npm:resend@2.0.0";
 
 const corsHeaders = {
@@ -360,6 +361,23 @@ function buildEmail(type: string, data: any): { subject: string; html: string } 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  // ─── API Gate Check ─────────────────────────────────────────────
+  const gateClient = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  );
+  const { data: apiConfig } = await gateClient
+    .from("api_configurations")
+    .select("is_enabled")
+    .eq("api_name", "send-notification-email")
+    .maybeSingle();
+  if (apiConfig && !apiConfig.is_enabled) {
+    return new Response(
+      JSON.stringify({ error: "Email Notifications API is currently disabled by administrator" }),
+      { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
   try {

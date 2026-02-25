@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-
+import { assertApiEnabled } from "@/services/apiGateService";
 // ─── Types ──────────────────────────────────────────────────────────────────
 type VpsAction =
   // Official API
@@ -42,6 +42,7 @@ type VpsAction =
 
 // ─── Core API call ──────────────────────────────────────────────────────────
 export async function callVpsApi(action: VpsAction, params: Record<string, unknown> = {}) {
+  await assertApiEnabled("vps-api", "Server Management");
   const { data, error } = await supabase.functions.invoke("vps-api", {
     body: { action, ...params },
   });
@@ -173,6 +174,7 @@ export async function deleteBackup(backupFile: string) {
 
 // ─── DNS Check (separate edge function) ─────────────────────────────────────
 export async function checkDns(domain: string, hostingAccountId?: string) {
+  await assertApiEnabled("check-dns", "DNS Checker");
   const { data, error } = await supabase.functions.invoke("check-dns", {
     body: { domain, hosting_account_id: hostingAccountId },
   });

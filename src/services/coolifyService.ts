@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { assertApiEnabled } from "@/services/apiGateService";
 
 type CoolifyAction =
   | "create-project"
@@ -20,6 +21,7 @@ type CoolifyAction =
   | "list-servers";
 
 async function callCoolifyApi(action: CoolifyAction, params: Record<string, unknown> = {}) {
+  await assertApiEnabled("coolify-api", "Application Engine");
   const { data, error } = await supabase.functions.invoke("coolify-api", {
     body: { action, ...params },
   });

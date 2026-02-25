@@ -13,6 +13,20 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // ─── API Gate Check ─────────────────────────────────────────────
+  const adminClient = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  );
+  const { data: apiConfig } = await adminClient
+    .from("api_configurations")
+    .select("is_enabled")
+    .eq("api_name", "coolify-api")
+    .maybeSingle();
+  if (apiConfig && !apiConfig.is_enabled) {
+    return json({ error: "Application Engine API is currently disabled by administrator" }, 503);
+  }
+
   // Auth check
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
