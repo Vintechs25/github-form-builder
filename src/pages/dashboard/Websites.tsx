@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import {
   Globe, Plus, ExternalLink, RefreshCw, CheckCircle2, Clock, Copy,
   Loader2, AlertTriangle, FolderOpen, Shield, Mail, Database,
-  HardDrive, Wifi, ChevronDown, ChevronUp,
+  HardDrive, Wifi, ChevronDown, ChevronUp, XCircle, Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -14,8 +14,42 @@ import type { User } from "@supabase/supabase-js";
 
 interface ContextType { user: User | null; }
 
+interface SiteStatus {
+  checking: boolean;
+  live: boolean | null;
+  responseTime: number | null;
+  error: string | null;
+  lastChecked: Date | null;
+}
+
 const NS1 = "ns1.vintechdev.store";
 const NS2 = "ns2.vintechdev.store";
+
+const checkSiteStatus = async (domain: string): Promise<{ live: boolean; responseTime: number; error: string | null }> => {
+  const start = performance.now();
+  try {
+    // Use a lightweight HEAD-like fetch via an image or fetch with no-cors
+    // We try fetching the domain — if it responds, it's live
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    
+    const res = await fetch(`https://${domain}`, {
+      method: "HEAD",
+      mode: "no-cors",
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    const elapsed = Math.round(performance.now() - start);
+    // no-cors returns opaque response (status 0) but if it doesn't throw, the server responded
+    return { live: true, responseTime: elapsed, error: null };
+  } catch (err: any) {
+    const elapsed = Math.round(performance.now() - start);
+    if (err.name === "AbortError") {
+      return { live: false, responseTime: elapsed, error: "Timeout (10s)" };
+    }
+    return { live: false, responseTime: elapsed, error: "Unreachable" };
+  }
+};
 
 const Websites = () => {
   const { user } = useOutletContext<ContextType>();
@@ -23,7 +57,9 @@ const Websites = () => {
   const [loading, setLoading] = useState(true);
   const [checkingDns, setCheckingDns] = useState<Record<string, boolean>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [siteStatuses, setSiteStatuses] = useState<Record<string, SiteStatus>>({});
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const uptimePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchAccounts = useCallback(async () => {
     if (!user) return;
@@ -37,6 +73,53 @@ const Websites = () => {
   }, [user]);
 
   useEffect(() => { fetchAccounts(); }, [fetchAccounts]);
+
+  // Real-time uptime checks for active sites
+  const checkAllSites = useCallback(async () => {
+    const activeSites = accounts.filter(a => a.status === "active");
+    if (activeSites.length === 0) return;
+
+    // Mark all as checking
+    setSiteStatuses(prev => {
+      const next = { ...prev };
+      activeSites.forEach(a => {
+        next[a.id] = { ...next[a.id], checking: true, live: next[a.id]?.live ?? null, responseTime: next[a.id]?.responseTime ?? null, error: next[a.id]?.error ?? null, lastChecked: next[a.id]?.lastChecked ?? null };
+      });
+      return next;
+    });
+
+    // Check all in parallel
+    const results = await Promise.all(
+      activeSites.map(async (a) => {
+        const result = await checkSiteStatus(a.domain);
+        return { id: a.id, ...result };
+      })
+    );
+
+    setSiteStatuses(prev => {
+      const next = { ...prev };
+      results.forEach(r => {
+        next[r.id] = {
+          checking: false,
+          live: r.live,
+          responseTime: r.responseTime,
+          error: r.error,
+          lastChecked: new Date(),
+        };
+      });
+      return next;
+    });
+  }, [accounts]);
+
+  // Initial check + polling every 30s
+  useEffect(() => {
+    const activeSites = accounts.filter(a => a.status === "active");
+    if (activeSites.length === 0) return;
+
+    checkAllSites();
+    uptimePollRef.current = setInterval(checkAllSites, 30000);
+    return () => { if (uptimePollRef.current) { clearInterval(uptimePollRef.current); uptimePollRef.current = null; } };
+  }, [accounts.filter(a => a.status === "active").map(a => a.id).join(",")]);
 
   const pendingDnsIds = accounts.filter((a) => a.status === "pending_dns").map((a) => a.id).join(",");
 
@@ -74,6 +157,18 @@ const Websites = () => {
     finally { setCheckingDns((prev) => ({ ...prev, [account.id]: false })); }
   };
 
+  const checkSingleSite = async (accountId: string, domain: string) => {
+    setSiteStatuses(prev => ({
+      ...prev,
+      [accountId]: { ...prev[accountId], checking: true, live: prev[accountId]?.live ?? null, responseTime: prev[accountId]?.responseTime ?? null, error: prev[accountId]?.error ?? null, lastChecked: prev[accountId]?.lastChecked ?? null },
+    }));
+    const result = await checkSiteStatus(domain);
+    setSiteStatuses(prev => ({
+      ...prev,
+      [accountId]: { checking: false, live: result.live, responseTime: result.responseTime, error: result.error, lastChecked: new Date() },
+    }));
+  };
+
   const copyNs = () => {
     navigator.clipboard.writeText(`${NS1}\n${NS2}`);
     toast.success("Nameservers copied!");
@@ -82,7 +177,37 @@ const Websites = () => {
   const formatMb = (mb: number) => (mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb} MB`);
   const toggleExpand = (id: string) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, accountId?: string) => {
+    // For active sites, show live/down status from uptime check
+    if (status === "active" && accountId) {
+      const site = siteStatuses[accountId];
+      if (site?.checking) {
+        return (
+          <span className="px-2 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground flex items-center gap-1">
+            <Loader2 className="w-3 h-3 animate-spin" /> Checking
+          </span>
+        );
+      }
+      if (site?.live === true) {
+        return (
+          <span className="px-2 py-1 rounded-full text-xs font-medium bg-success/10 text-success flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+            Live · {site.responseTime}ms
+          </span>
+        );
+      }
+      if (site?.live === false) {
+        return (
+          <span className="px-2 py-1 rounded-full text-xs font-medium bg-destructive/10 text-destructive flex items-center gap-1">
+            <XCircle className="w-3 h-3" />
+            Down {site.error ? `· ${site.error}` : ""}
+          </span>
+        );
+      }
+      // Not yet checked
+      return <span className="px-2 py-1 rounded-full text-xs font-medium bg-success/10 text-success">Running</span>;
+    }
+
     const map: Record<string, { label: string; cls: string }> = {
       active: { label: "Running", cls: "bg-success/10 text-success" },
       pending_dns: { label: "Pending DNS", cls: "bg-warning/10 text-warning" },
@@ -94,19 +219,35 @@ const Websites = () => {
     return <span className={`px-2 py-1 rounded-full text-xs font-medium ${s.cls}`}>{s.label}</span>;
   };
 
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = (status: string, accountId?: string) => {
+    if (status === "active" && accountId) {
+      const site = siteStatuses[accountId];
+      if (site?.checking) return <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />;
+      if (site?.live === true) return <CheckCircle2 className="w-5 h-5 text-success" />;
+      if (site?.live === false) return <XCircle className="w-5 h-5 text-destructive" />;
+    }
     if (status === "active") return <CheckCircle2 className="w-5 h-5 text-success" />;
     if (status === "pending_dns") return <Clock className="w-5 h-5 text-warning" />;
     if (status === "suspended" || status === "expired") return <AlertTriangle className="w-5 h-5 text-destructive" />;
     return <Globe className="w-5 h-5 text-accent" />;
   };
 
-  const getStatusBg = (status: string) => {
+  const getStatusBg = (status: string, accountId?: string) => {
+    if (status === "active" && accountId) {
+      const site = siteStatuses[accountId];
+      if (site?.live === false) return "bg-destructive/10";
+      return "bg-success/10";
+    }
     if (status === "active") return "bg-success/10";
     if (status === "pending_dns") return "bg-warning/10";
     if (status === "suspended" || status === "expired") return "bg-destructive/10";
     return "bg-accent/10";
   };
+
+  // Count live/down sites
+  const activeSites = accounts.filter(a => a.status === "active");
+  const liveSites = activeSites.filter(a => siteStatuses[a.id]?.live === true).length;
+  const downSites = activeSites.filter(a => siteStatuses[a.id]?.live === false).length;
 
   return (
     <div className="space-y-6">
@@ -115,10 +256,36 @@ const Websites = () => {
           <h1 className="font-display font-semibold text-xl">Websites</h1>
           <p className="text-sm text-muted-foreground">Manage your hosted websites with email, databases, and files</p>
         </div>
-        <Link to="/dashboard/buy-hosting">
-          <Button variant="accent" size="sm"><Plus className="w-4 h-4 mr-1" /> New Website</Button>
-        </Link>
+        <div className="flex gap-2">
+          {activeSites.length > 0 && (
+            <Button variant="outline" size="sm" onClick={checkAllSites} disabled={Object.values(siteStatuses).some(s => s.checking)}>
+              <Activity className="w-4 h-4 mr-1" /> Check All
+            </Button>
+          )}
+          <Link to="/dashboard/buy-hosting">
+            <Button variant="accent" size="sm"><Plus className="w-4 h-4 mr-1" /> New Website</Button>
+          </Link>
+        </div>
       </div>
+
+      {/* Uptime summary banner */}
+      {activeSites.length > 0 && (liveSites > 0 || downSites > 0) && (
+        <div className={`rounded-lg p-4 flex items-center gap-3 ${downSites > 0 ? "bg-destructive/5 border border-destructive/20" : "bg-success/5 border border-success/20"}`}>
+          <Activity className={`w-5 h-5 shrink-0 ${downSites > 0 ? "text-destructive" : "text-success"}`} />
+          <div className="text-sm flex-1">
+            {downSites > 0 ? (
+              <p className="font-medium text-destructive">
+                {downSites} site{downSites > 1 ? "s" : ""} down · {liveSites} live
+              </p>
+            ) : (
+              <p className="font-medium text-success">
+                All {liveSites} site{liveSites > 1 ? "s" : ""} live ✓
+              </p>
+            )}
+            <p className="text-muted-foreground text-xs mt-0.5">Auto-checking every 30 seconds</p>
+          </div>
+        </div>
+      )}
 
       {/* Nameserver banner for pending_dns */}
       {accounts.some((a) => a.status === "pending_dns") && (
@@ -154,6 +321,7 @@ const Websites = () => {
           {accounts.map((account, i) => {
             const plan = account.hosting_plans;
             const isExpanded = expanded[account.id];
+            const site = siteStatuses[account.id];
 
             return (
               <motion.div
@@ -166,16 +334,47 @@ const Websites = () => {
                 <div className="p-5">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${getStatusBg(account.status)}`}>
-                        {getStatusIcon(account.status)}
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${getStatusBg(account.status, account.id)}`}>
+                        {getStatusIcon(account.status, account.id)}
                       </div>
                       <div>
                         <h3 className="font-semibold">{account.domain}</h3>
                         <p className="text-sm text-muted-foreground">{plan?.name || "Website"}</p>
                       </div>
                     </div>
-                    {getStatusBadge(account.status)}
+                    <div className="flex items-center gap-2">
+                      {getStatusBadge(account.status, account.id)}
+                      {account.status === "active" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => checkSingleSite(account.id, account.domain)}
+                          disabled={site?.checking}
+                          title="Check status"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${site?.checking ? "animate-spin" : ""}`} />
+                        </Button>
+                      )}
+                    </div>
                   </div>
+
+                  {/* Down alert for active sites */}
+                  {account.status === "active" && site?.live === false && (
+                    <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-4 mb-4">
+                      <p className="text-sm font-medium text-destructive flex items-center gap-2">
+                        <XCircle className="w-4 h-4" /> Website is not responding
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {site.error || "Could not reach your website."} — Response time: {site.responseTime}ms
+                      </p>
+                      {site.lastChecked && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Last checked: {site.lastChecked.toLocaleTimeString()}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   {account.status === "pending" && (
                     <div className="bg-muted/50 border border-border rounded-lg p-4">
