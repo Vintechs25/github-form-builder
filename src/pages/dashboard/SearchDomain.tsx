@@ -60,32 +60,49 @@ const SearchDomain = () => {
     if (!query.trim()) return;
     setSearching(true);
     setResults([]);
-    setSearchedQuery(query.trim());
+    const rawQuery = query.trim();
+    setSearchedQuery(rawQuery);
 
-    const baseName = query.trim().replace(/\.[a-z.]+$/i, "");
+    const baseName = rawQuery.replace(/\.[a-z.]+$/i, "");
+    const hasExplicitTld = /\.[a-z]{2,}$/i.test(rawQuery);
+    const explicitTld = hasExplicitTld ? rawQuery.substring(rawQuery.indexOf(".")) : null;
+
     const searchResults: SearchResult[] = [];
 
-    for (const tld of searchTlds) {
-      const domain = `${baseName}${tld}`;
+    // Helper to check a single domain
+    const checkDomain = async (domain: string): Promise<SearchResult> => {
       try {
         const { data, error } = await supabase.functions.invoke("namesilo-api", {
           body: { action: "checkAvailability", domain },
         });
         const prices = getTldPrice(domain);
         if (!error && data?.data) {
-          searchResults.push({
+          return {
             domain,
             available: data.data.available || false,
             price: prices.register ?? (data.data.price || null),
             renewPrice: prices.renew,
-          });
-        } else {
-          searchResults.push({ domain, available: false, price: prices.register, renewPrice: prices.renew });
+          };
         }
+        return { domain, available: false, price: prices.register, renewPrice: prices.renew };
       } catch {
         const prices = getTldPrice(domain);
-        searchResults.push({ domain, available: false, price: prices.register, renewPrice: prices.renew });
+        return { domain, available: false, price: prices.register, renewPrice: prices.renew };
       }
+    };
+
+    // If user typed an explicit TLD (e.g. "sreggl.com"), check that exact domain first
+    if (explicitTld) {
+      const exactResult = await checkDomain(`${baseName}${explicitTld}`);
+      searchResults.push(exactResult);
+    }
+
+    // Then check all other TLDs (skip the one already checked)
+    for (const tld of searchTlds) {
+      if (explicitTld && tld === explicitTld) continue;
+      const domain = `${baseName}${tld}`;
+      const result = await checkDomain(domain);
+      searchResults.push(result);
     }
 
     setResults(searchResults);
@@ -144,11 +161,9 @@ const SearchDomain = () => {
     setRegistering(null);
   };
 
-  // Split results: primary = exact match or first available, rest = alternatives
-  const primaryResult = results.length > 0
-    ? results.find((r) => r.available) || results[0]
-    : null;
-  const alternativeResults = results.filter((r) => r !== primaryResult);
+  // Primary = the first result (the exact domain searched), rest = alternatives
+  const primaryResult = results.length > 0 ? results[0] : null;
+  const alternativeResults = results.slice(1);
 
   return (
     <div className="space-y-6">
