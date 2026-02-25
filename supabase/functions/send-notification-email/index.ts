@@ -206,6 +206,82 @@ function buildExpiringEmail(data: any): { subject: string; html: string } {
   return { subject: `⏰ Hosting for ${domain} expires in ${daysLeft} days`, html: wrapInBrandedTemplate(content, `Your hosting for ${domain} expires in ${daysLeft} days.`) };
 }
 
+function buildDomainExpiringEmail(data: any): { subject: string; html: string } {
+  const { firstName, domainName, expiresAt, daysLeft } = data;
+  const urgencyColor = daysLeft <= 3 ? "#dc2626" : "#d97706";
+  const content = `
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="display:inline-block;width:56px;height:56px;border-radius:50%;background-color:#fffbeb;line-height:56px;font-size:28px;">🌐</div>
+    </div>
+    <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:${urgencyColor};text-align:center;">Domain Expiring Soon</h2>
+    <p style="margin:0 0 24px;font-size:15px;color:#6b7280;text-align:center;">Renew your domain to keep it active</p>
+    <p style="font-size:15px;color:#374151;line-height:1.6;">Hi${firstName ? ` ${firstName}` : ""},</p>
+    <p style="font-size:15px;color:#374151;line-height:1.6;">Your domain <strong>${domainName}</strong> will expire in <strong style="color:${urgencyColor};">${daysLeft} day${daysLeft > 1 ? "s" : ""}</strong>.</p>
+    ${infoTable([["Domain", domainName], ["Expires", expiresAt], ["Days Left", `${daysLeft}`]])}
+    <p style="font-size:15px;color:#374151;line-height:1.6;">If your domain expires, your website and emails will stop working. Renew now:</p>
+    ${emailButton("Renew Domain", "https://vintechdev.store/dashboard/domains", urgencyColor)}
+    <p style="font-size:13px;color:#9ca3af;">If you've already renewed, please disregard this email.</p>
+  `;
+  return { subject: `🌐 Domain ${domainName} expires in ${daysLeft} days`, html: wrapInBrandedTemplate(content, `Your domain ${domainName} expires in ${daysLeft} days.`) };
+}
+
+function buildSslIssuedEmail(data: any): { subject: string; html: string } {
+  const { firstName, domain } = data;
+  const content = `
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="display:inline-block;width:56px;height:56px;border-radius:50%;background-color:#f0fdf4;line-height:56px;font-size:28px;">🔒</div>
+    </div>
+    <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#16a34a;text-align:center;">SSL Certificate Issued</h2>
+    <p style="margin:0 0 24px;font-size:15px;color:#6b7280;text-align:center;">Your website is now secured with HTTPS</p>
+    <p style="font-size:15px;color:#374151;line-height:1.6;">Hi${firstName ? ` ${firstName}` : ""},</p>
+    <p style="font-size:15px;color:#374151;line-height:1.6;">Great news! An SSL certificate has been successfully issued for <strong>${domain}</strong>. Your website is now protected with HTTPS encryption.</p>
+    ${infoTable([["Domain", domain], ["SSL Status", "Active ✅"], ["Encryption", "TLS 1.2 / 1.3"]])}
+    <p style="font-size:15px;color:#374151;line-height:1.6;">Your visitors will now see a secure padlock icon in their browser. No action is needed on your part.</p>
+    ${emailButton("View Website", `https://${domain}`, "#16a34a")}
+  `;
+  return { subject: `🔒 SSL Certificate Issued for ${domain}`, html: wrapInBrandedTemplate(content, `SSL certificate for ${domain} is now active.`) };
+}
+
+function buildTicketReplyEmail(data: any): { subject: string; html: string } {
+  const { firstName, ticketSubject, ticketId, replyPreview } = data;
+  const content = `
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="display:inline-block;width:56px;height:56px;border-radius:50%;background-color:#eff6ff;line-height:56px;font-size:28px;">💬</div>
+    </div>
+    <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1f2937;text-align:center;">New Reply on Your Ticket</h2>
+    <p style="margin:0 0 24px;font-size:15px;color:#6b7280;text-align:center;">Our support team has responded</p>
+    <p style="font-size:15px;color:#374151;line-height:1.6;">Hi${firstName ? ` ${firstName}` : ""},</p>
+    <p style="font-size:15px;color:#374151;line-height:1.6;">A staff member has replied to your support ticket:</p>
+    ${infoTable([["Ticket", ticketSubject]])}
+    ${replyPreview ? `<div style="background-color:#f9fafb;border-left:4px solid #2ecc71;padding:16px;border-radius:0 8px 8px 0;margin:20px 0;font-size:14px;color:#374151;line-height:1.6;">${replyPreview.substring(0, 300)}${replyPreview.length > 300 ? "…" : ""}</div>` : ""}
+    ${emailButton("View Conversation", "https://vintechdev.store/dashboard/support")}
+  `;
+  return { subject: `💬 New reply: ${ticketSubject}`, html: wrapInBrandedTemplate(content, `Staff replied to your ticket: ${ticketSubject}`) };
+}
+
+function buildAccountWelcomeEmail(data: any): { subject: string; html: string } {
+  const { firstName, email } = data;
+  const content = `
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="display:inline-block;width:56px;height:56px;border-radius:50%;background-color:#f0fdf4;line-height:56px;font-size:28px;">🎉</div>
+    </div>
+    <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1f2937;text-align:center;">Welcome to VintechHost!</h2>
+    <p style="margin:0 0 24px;font-size:15px;color:#6b7280;text-align:center;">Your account is ready to go</p>
+    <p style="font-size:15px;color:#374151;line-height:1.6;">Hi${firstName ? ` ${firstName}` : ""},</p>
+    <p style="font-size:15px;color:#374151;line-height:1.6;">Welcome to <strong>VintechHost</strong>! Your account has been created successfully.</p>
+    ${infoTable([["Email", email || "—"], ["Account Status", "Active"]])}
+    <h3 style="font-size:16px;font-weight:600;color:#1f2937;margin:24px 0 12px;">What's Next?</h3>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr><td style="padding:8px 0;font-size:14px;color:#374151;">🌐 <strong>Register a domain</strong> — Find the perfect domain for your project</td></tr>
+      <tr><td style="padding:8px 0;font-size:14px;color:#374151;">🖥️ <strong>Choose a hosting plan</strong> — From shared hosting to cloud applications</td></tr>
+      <tr><td style="padding:8px 0;font-size:14px;color:#374151;">🚀 <strong>Deploy your website</strong> — Go live in minutes</td></tr>
+    </table>
+    ${emailButton("Go to Dashboard", "https://vintechdev.store/dashboard")}
+    <p style="font-size:13px;color:#9ca3af;">If you need any help, our support team is always here for you.</p>
+  `;
+  return { subject: `🎉 Welcome to VintechHost, ${firstName || "there"}!`, html: wrapInBrandedTemplate(content, `Welcome to VintechHost! Your account is ready.`) };
+}
+
 // ─── TEMPLATE ROUTER ────────────────────────────────────────────────
 function buildEmail(type: string, data: any): { subject: string; html: string } | null {
   switch (type) {
@@ -215,6 +291,10 @@ function buildEmail(type: string, data: any): { subject: string; html: string } 
     case "payment_received": return buildPaymentReceivedEmail(data);
     case "welcome": return buildWelcomeEmail(data);
     case "expiring": return buildExpiringEmail(data);
+    case "domain_expiring": return buildDomainExpiringEmail(data);
+    case "ssl_issued": return buildSslIssuedEmail(data);
+    case "ticket_reply": return buildTicketReplyEmail(data);
+    case "account_welcome": return buildAccountWelcomeEmail(data);
     default: return null;
   }
 }

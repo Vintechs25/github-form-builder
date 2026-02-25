@@ -21,10 +21,10 @@ serve(async (req) => {
     );
 
     const now = new Date();
-    const results: Array<{ domain: string; daysLeft: number; sent: boolean; error?: string }> = [];
+    const results: Array<{ name: string; type: string; daysLeft: number; sent: boolean; error?: string }> = [];
 
+    // ─── CHECK HOSTING ACCOUNTS ────────────────────────────────────
     for (const days of REMINDER_DAYS) {
-      // Find accounts expiring in exactly `days` days (within a 24h window)
       const targetDate = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
       const windowStart = new Date(targetDate.getTime() - 12 * 60 * 60 * 1000).toISOString();
       const windowEnd = new Date(targetDate.getTime() + 12 * 60 * 60 * 1000).toISOString();
@@ -37,50 +37,62 @@ serve(async (req) => {
         .gte("expires_at", windowStart)
         .lt("expires_at", windowEnd);
 
-      if (error) {
-        console.error(`[check-expiring] Error fetching accounts expiring in ${days} days:`, error);
-        continue;
-      }
-
-      console.log(`[check-expiring] Found ${accounts?.length || 0} accounts expiring in ~${days} days`);
+      if (error) { console.error(`[check-expiring] Error hosting ${days}d:`, error); continue; }
+      console.log(`[check-expiring] ${accounts?.length || 0} hosting accounts expiring in ~${days} days`);
 
       for (const account of accounts || []) {
         try {
-          const { data: profile } = await serviceClient
-            .from("profiles")
-            .select("email, first_name")
-            .eq("user_id", account.user_id)
-            .maybeSingle();
-
+          const { data: profile } = await serviceClient.from("profiles").select("email, first_name").eq("user_id", account.user_id).maybeSingle();
           if (!profile?.email) continue;
-
           const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
           const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
           await fetch(`${supabaseUrl}/functions/v1/send-notification-email`, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${serviceKey}`,
-            },
-            body: JSON.stringify({
-              to: profile.email,
-              type: "expiring",
-              data: {
-                firstName: profile.first_name,
-                domain: account.domain,
-                expiresAt: new Date(account.expires_at).toLocaleDateString(),
-                daysLeft: days,
-                dashboardUrl: "https://vintechdev.store/dashboard/billing",
-              },
-            }),
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+            body: JSON.stringify({ to: profile.email, type: "expiring", data: { firstName: profile.first_name, domain: account.domain, expiresAt: new Date(account.expires_at).toLocaleDateString(), daysLeft: days, dashboardUrl: "https://vintechdev.store/dashboard/billing" } }),
           });
-
-          console.log(`[check-expiring] Expiry reminder sent to ${profile.email} for ${account.domain} (${days} days)`);
-          results.push({ domain: account.domain, daysLeft: days, sent: true });
+          console.log(`[check-expiring] Hosting expiry reminder sent to ${profile.email} for ${account.domain} (${days}d)`);
+          results.push({ name: account.domain, type: "hosting", daysLeft: days, sent: true });
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : "Unknown error";
-          console.error(`[check-expiring] Failed to send reminder for ${account.domain}:`, errMsg);
-          results.push({ domain: account.domain, daysLeft: days, sent: false, error: errMsg });
+          results.push({ name: account.domain, type: "hosting", daysLeft: days, sent: false, error: errMsg });
+        }
+      }
+    }
+
+    // ─── CHECK DOMAINS ─────────────────────────────────────────────
+    for (const days of REMINDER_DAYS) {
+      const targetDate = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+      const windowStart = new Date(targetDate.getTime() - 12 * 60 * 60 * 1000).toISOString();
+      const windowEnd = new Date(targetDate.getTime() + 12 * 60 * 60 * 1000).toISOString();
+
+      const { data: domains, error } = await serviceClient
+        .from("domains")
+        .select("id, domain_name, user_id, expires_at")
+        .eq("status", "active")
+        .not("expires_at", "is", null)
+        .gte("expires_at", windowStart)
+        .lt("expires_at", windowEnd);
+
+      if (error) { console.error(`[check-expiring] Error domains ${days}d:`, error); continue; }
+      console.log(`[check-expiring] ${domains?.length || 0} domains expiring in ~${days} days`);
+
+      for (const domain of domains || []) {
+        try {
+          const { data: profile } = await serviceClient.from("profiles").select("email, first_name").eq("user_id", domain.user_id).maybeSingle();
+          if (!profile?.email) continue;
+          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+          const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+          await fetch(`${supabaseUrl}/functions/v1/send-notification-email`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+            body: JSON.stringify({ to: profile.email, type: "domain_expiring", data: { firstName: profile.first_name, domainName: domain.domain_name, expiresAt: new Date(domain.expires_at).toLocaleDateString(), daysLeft: days } }),
+          });
+          console.log(`[check-expiring] Domain expiry reminder sent to ${profile.email} for ${domain.domain_name} (${days}d)`);
+          results.push({ name: domain.domain_name, type: "domain", daysLeft: days, sent: true });
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : "Unknown error";
+          results.push({ name: domain.domain_name, type: "domain", daysLeft: days, sent: false, error: errMsg });
         }
       }
     }

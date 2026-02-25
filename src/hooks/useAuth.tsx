@@ -25,6 +25,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+
+        // Send welcome email on first sign-up confirmation
+        if (event === "SIGNED_IN" && session?.user) {
+          const meta = session.user.user_metadata;
+          // Only send if profile was just created (first sign-in)
+          supabase
+            .from("profiles")
+            .select("id")
+            .eq("user_id", session.user.id)
+            .maybeSingle()
+            .then(({ data: profile }) => {
+              if (!profile) {
+                // Profile doesn't exist yet — will be created by trigger; send welcome
+                setTimeout(() => {
+                  supabase.functions.invoke("send-notification-email", {
+                    body: {
+                      to: session.user!.email,
+                      type: "account_welcome",
+                      data: {
+                        firstName: meta?.first_name || "",
+                        email: session.user!.email,
+                      },
+                    },
+                  }).catch((err) => console.error("Welcome email error:", err));
+                }, 2000); // small delay to let profile trigger complete
+              }
+            });
+        }
       }
     );
 

@@ -60,6 +60,33 @@ const AdminTickets = () => {
     });
     if (error) { toast.error(error.message); setSending(false); return; }
     toast.success("Reply sent");
+
+    // Send ticket reply notification email to the customer
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("email, first_name")
+        .eq("user_id", selectedTicket.user_id)
+        .maybeSingle();
+
+      if (profile?.email) {
+        await supabase.functions.invoke("send-notification-email", {
+          body: {
+            to: profile.email,
+            type: "ticket_reply",
+            data: {
+              firstName: profile.first_name,
+              ticketSubject: selectedTicket.subject,
+              ticketId: selectedTicket.id,
+              replyPreview: reply.trim(),
+            },
+          },
+        });
+      }
+    } catch (emailErr) {
+      console.error("Failed to send ticket reply email:", emailErr);
+    }
+
     setReply("");
     setSending(false);
     // Reload messages
