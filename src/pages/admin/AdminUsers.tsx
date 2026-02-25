@@ -9,9 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Progress } from "@/components/ui/progress";
-import { Search, MoreVertical, Eye, ShieldCheck, UserCog, Server, Globe, CreditCard, Package, BarChart3, Pause, Play } from "lucide-react";
+import { Search, MoreVertical, Eye, ShieldCheck, UserCog, Server, Globe, CreditCard, Package, BarChart3, Pause, Play, LogIn } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { useImpersonation } from "@/hooks/useImpersonation";
+import { useNavigate } from "react-router-dom";
 
 interface Profile {
   id: string; user_id: string; first_name: string | null; last_name: string | null;
@@ -21,6 +23,8 @@ interface Profile {
 const ROLES = ["user", "moderator", "admin"] as const;
 
 const AdminUsers = () => {
+  const { startImpersonation } = useImpersonation();
+  const navigate = useNavigate();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [roles, setRoles] = useState<Record<string, string>>({});
   const [plans, setPlans] = useState<any[]>([]);
@@ -188,6 +192,17 @@ const AdminUsers = () => {
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => viewUser(p)}>
                         <Eye className="w-4 h-4 mr-2" /> View Details
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => {
+                        startImpersonation({
+                          user_id: p.user_id,
+                          first_name: p.first_name,
+                          last_name: p.last_name,
+                          email: p.email,
+                        });
+                        navigate("/dashboard");
+                      }}>
+                        <LogIn className="w-4 h-4 mr-2 text-orange-500" /> Login as User
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => openAssignPlan(p)}>
                         <Package className="w-4 h-4 mr-2" /> Assign Plan
