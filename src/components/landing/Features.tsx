@@ -8,56 +8,84 @@ import {
   Mail,
   Upload,
   CreditCard,
+  Smartphone,
+  GitBranch,
+  BarChart3,
+  Headphones,
 } from "lucide-react";
 
 const features = [
   {
-    icon: Server,
-    title: "WordPress Optional",
+    icon: Zap,
+    title: "Blazing Fast Servers",
     description:
-      "One-click WordPress installation or use our file hosting for any website type.",
-  },
-  {
-    icon: Globe,
-    title: "Free SSL & Domain",
-    description:
-      "Secure your site with free SSL certificates. Free subdomain included.",
+      "OpenLiteSpeed powered hosting with SSD storage for sub-second load times.",
   },
   {
     icon: Shield,
-    title: "99.9% Uptime",
+    title: "Free SSL & Security",
     description:
-      "Enterprise-grade reliability with automated backups and DDoS protection.",
+      "Auto-provisioned SSL certificates, DDoS protection, and firewall rules included.",
   },
   {
-    icon: Zap,
-    title: "OpenLiteSpeed",
+    icon: Server,
+    title: "One-Click WordPress",
     description:
-      "Lightning-fast hosting powered by CyberPanel and OpenLiteSpeed server.",
+      "Install WordPress, staging environments, and themes with a single click.",
+  },
+  {
+    icon: CreditCard,
+    title: "M-Pesa & Card Payments",
+    description:
+      "Pay with M-Pesa, Visa, Mastercard, or bank transfer. No forex fees.",
+  },
+  {
+    icon: Globe,
+    title: "Domain Registration",
+    description:
+      "Register .co.ke, .com, .org domains directly from your dashboard.",
+  },
+  {
+    icon: Mail,
+    title: "Professional Email",
+    description:
+      "Custom email accounts with your domain. Webmail included for free.",
+  },
+  {
+    icon: GitBranch,
+    title: "Git Deployments",
+    description:
+      "Connect GitHub repos and auto-deploy on push. Perfect for developers.",
   },
   {
     icon: Database,
-    title: "MySQL Database",
+    title: "MySQL & phpMyAdmin",
     description:
       "Full database access with phpMyAdmin for complete data control.",
   },
   {
     icon: Upload,
-    title: "FTP & File Manager",
+    title: "File Manager & FTP",
     description:
-      "Upload files via FTP or browser-based file manager. Easy access.",
+      "Browser-based file manager or connect via FTP. Your choice.",
   },
   {
-    icon: CreditCard,
-    title: "M-Pesa Payments",
+    icon: BarChart3,
+    title: "Usage Analytics",
     description:
-      "Pay with M-Pesa, cards, or mobile money. Instant activation on payment.",
+      "Real-time bandwidth, storage, and visitor stats on your dashboard.",
   },
   {
-    icon: Mail,
-    title: "Email Hosting",
+    icon: Smartphone,
+    title: "Mobile-Ready Dashboard",
     description:
-      "Professional email with your domain. Webmail access included.",
+      "Manage your hosting from any device with our responsive dashboard.",
+  },
+  {
+    icon: Headphones,
+    title: "24/7 Kenyan Support",
+    description:
+      "Local support team that responds in minutes, not days. Via WhatsApp too.",
   },
 ];
 
@@ -65,9 +93,7 @@ const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-    },
+    transition: { staggerChildren: 0.06 },
   },
 };
 
@@ -79,6 +105,9 @@ const itemVariants = {
 const Features = () => {
   return (
     <section id="features" className="py-20 md:py-32 relative">
+      {/* Subtle background glow */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-accent/5 rounded-full blur-[100px] -z-10" />
+
       <div className="container mx-auto px-4">
         {/* Section header */}
         <motion.div
@@ -95,8 +124,8 @@ const Features = () => {
             <span className="text-gradient">Succeed Online</span>
           </h2>
           <p className="text-muted-foreground text-lg">
-            Powerful hosting features designed for Kenyan businesses and developers.
-            Get started in minutes.
+            Powerful hosting features built for Kenyan businesses and developers.
+            No compromises.
           </p>
         </motion.div>
 
@@ -106,18 +135,18 @@ const Features = () => {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true }}
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 max-w-7xl mx-auto"
         >
           {features.map((feature) => (
             <motion.div
               key={feature.title}
               variants={itemVariants}
-              className="group p-6 rounded-2xl bg-card border border-border hover:border-accent/30 hover:shadow-lg transition-all duration-300"
+              className="group p-5 rounded-2xl bg-card border border-border hover:border-accent/30 hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5"
             >
-              <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-4 group-hover:bg-accent/20 transition-colors">
-                <feature.icon className="w-6 h-6 text-accent" />
+              <div className="w-11 h-11 rounded-xl bg-accent/10 flex items-center justify-center mb-4 group-hover:bg-accent/20 group-hover:scale-110 transition-all duration-300">
+                <feature.icon className="w-5 h-5 text-accent" />
               </div>
-              <h3 className="font-display font-semibold text-lg mb-2">
+              <h3 className="font-display font-semibold text-base mb-1.5">
                 {feature.title}
               </h3>
               <p className="text-muted-foreground text-sm leading-relaxed">
