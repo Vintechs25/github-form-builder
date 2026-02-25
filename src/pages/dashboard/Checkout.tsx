@@ -14,6 +14,8 @@ interface CheckoutState {
   planId: string;
   domain: string;
   billingCycle: "monthly" | "yearly";
+  isUpgrade?: boolean;
+  existingAccountId?: string | null;
 }
 
 interface Plan {
@@ -88,7 +90,7 @@ const Checkout = () => {
         .from("orders")
         .insert({
           user_id: user.id,
-          type: "hosting",
+          type: state.isUpgrade ? "upgrade" : "hosting",
           total_amount: price,
           status: "pending",
           plan_id: plan.id,
@@ -119,34 +121,41 @@ const Checkout = () => {
         .single();
       if (invErr) throw invErr;
 
-      // 3. Create hosting account (pending_dns — will activate after DNS verification)
-      const { error: hostErr } = await supabase.from("hosting_accounts").insert({
-        user_id: user.id,
-        domain: state.domain,
-        plan_id: plan.id,
-        status: "pending_dns",
-        hosting_type: plan.wordpress_enabled ? "wordpress" : "file_upload",
-      });
-      if (hostErr) {
-        console.error("Hosting account creation error:", hostErr);
-        // Don't throw — proceed with payment, process-order will create it after payment
-      }
-
-      // 4. Create domain record if not exists
-      const { data: existingDomain } = await supabase
-        .from("domains")
-        .select("id")
-        .eq("domain_name", state.domain)
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (!existingDomain) {
-        await supabase.from("domains").insert({
+      if (state.isUpgrade && state.existingAccountId) {
+        // For upgrades, update existing hosting account's plan
+        await supabase
+          .from("hosting_accounts")
+          .update({ plan_id: plan.id })
+          .eq("id", state.existingAccountId);
+      } else {
+        // 3. Create hosting account (pending_dns — will activate after DNS verification)
+        const { error: hostErr } = await supabase.from("hosting_accounts").insert({
           user_id: user.id,
-          domain_name: state.domain,
-          domain_type: "primary",
-          status: "pending",
+          domain: state.domain,
+          plan_id: plan.id,
+          status: "pending_dns",
+          hosting_type: plan.wordpress_enabled ? "wordpress" : "file_upload",
         });
+        if (hostErr) {
+          console.error("Hosting account creation error:", hostErr);
+        }
+
+        // 4. Create domain record if not exists
+        const { data: existingDomain } = await supabase
+          .from("domains")
+          .select("id")
+          .eq("domain_name", state.domain)
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (!existingDomain) {
+          await supabase.from("domains").insert({
+            user_id: user.id,
+            domain_name: state.domain,
+            domain_type: "primary",
+            status: "pending",
+          });
+        }
       }
 
       // 5. Send invoice email (fire and forget)

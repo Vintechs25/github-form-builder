@@ -1,15 +1,16 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Package, Check, ArrowRight } from "lucide-react";
+import { Package, Check, ArrowRight, ArrowUpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import type { User } from "@supabase/supabase-js";
 
-
+interface ContextType { user: User | null; }
 
 interface Plan {
   id: string;
@@ -24,26 +25,35 @@ interface Plan {
   max_email_accounts: number;
   max_databases: number;
   wordpress_enabled: boolean;
+  is_recommended: boolean;
 }
 
 const BuyHosting = () => {
+  const { user } = useOutletContext<ContextType>();
   const navigate = useNavigate();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const [domainInput, setDomainInput] = useState("");
+  const [existingAccount, setExistingAccount] = useState<{ id: string; domain: string; plan_id: string | null } | null>(null);
 
   useEffect(() => {
-    supabase
-      .from("hosting_plans")
-      .select("*")
-      .eq("is_active", true)
-      .order("price_monthly", { ascending: true })
-      .then(({ data }) => {
-        setPlans((data as Plan[]) || []);
-        setLoading(false);
-      });
-  }, []);
+    if (!user) return;
+    // Fetch plans and existing hosting account in parallel
+    Promise.all([
+      supabase.from("hosting_plans").select("*").eq("is_active", true).order("price_monthly", { ascending: true }),
+      supabase.from("hosting_accounts").select("id, domain, plan_id").eq("user_id", user.id).limit(1).maybeSingle(),
+    ]).then(([plansRes, accountRes]) => {
+      setPlans((plansRes.data as Plan[]) || []);
+      if (accountRes.data) {
+        setExistingAccount(accountRes.data);
+        setDomainInput(accountRes.data.domain);
+      }
+      setLoading(false);
+    });
+  }, [user]);
+
+  const isUpgrade = !!existingAccount;
 
   const formatMb = (mb: number) => (mb >= 1024 ? `${(mb / 1024).toFixed(0)} GB` : `${mb} MB`);
 
@@ -63,6 +73,8 @@ const BuyHosting = () => {
         planId: plan.id,
         domain,
         billingCycle,
+        isUpgrade,
+        existingAccountId: existingAccount?.id || null,
       },
     });
   };
@@ -74,24 +86,32 @@ const BuyHosting = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display font-semibold text-lg">Buy Hosting</h1>
-        <p className="text-sm text-muted-foreground">Choose a hosting plan that fits your needs</p>
+        <h1 className="font-display font-semibold text-lg">
+          {isUpgrade ? "Upgrade Plan" : "Buy Hosting"}
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          {isUpgrade
+            ? `Change the hosting plan for ${existingAccount?.domain}`
+            : "Choose a hosting plan that fits your needs"}
+        </p>
       </div>
 
-      {/* Domain input */}
-      <div className="bg-card rounded-xl border border-border p-5">
-        <Label className="text-sm font-medium">Your Domain Name</Label>
-        <p className="text-xs text-muted-foreground mb-2">Enter the domain you want to host. You'll need to point its nameservers to our servers to activate.</p>
-        <Input
-          placeholder="example.co.ke"
-          value={domainInput}
-          onChange={(e) => setDomainInput(e.target.value)}
-          className="max-w-md"
-        />
-        <div className="mt-2 text-xs text-muted-foreground">
-          After ordering, point your domain's nameservers to: <span className="font-mono font-semibold text-foreground">ns1.vintechdev.store</span> & <span className="font-mono font-semibold text-foreground">ns2.vintechdev.store</span>
+      {/* Domain input — only show for new purchases */}
+      {!isUpgrade && (
+        <div className="bg-card rounded-xl border border-border p-5">
+          <Label className="text-sm font-medium">Your Domain Name</Label>
+          <p className="text-xs text-muted-foreground mb-2">Enter the domain you want to host. You'll need to point its nameservers to our servers to activate.</p>
+          <Input
+            placeholder="example.co.ke"
+            value={domainInput}
+            onChange={(e) => setDomainInput(e.target.value)}
+            className="max-w-md"
+          />
+          <div className="mt-2 text-xs text-muted-foreground">
+            After ordering, point your domain's nameservers to: <span className="font-mono font-semibold text-foreground">ns1.vintechdev.store</span> & <span className="font-mono font-semibold text-foreground">ns2.vintechdev.store</span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Billing toggle */}
       <div className="flex items-center justify-center gap-3">
@@ -121,52 +141,78 @@ const BuyHosting = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {plans.map((plan, i) => (
-            <motion.div
-              key={plan.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
-              className="bg-card rounded-xl border border-border p-6 flex flex-col hover:border-accent/30 hover:shadow-lg transition-all"
-            >
-              <h3 className="font-display font-bold text-xl mb-1">{plan.name}</h3>
-              {plan.description && (
-                <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
-              )}
-              <div className="mb-6">
-                <span className="text-3xl font-display font-bold">
-                  KES {getPrice(plan).toLocaleString()}
-                </span>
-                <span className="text-muted-foreground text-sm">/{billingCycle === "yearly" ? "yr" : "mo"}</span>
-              </div>
-
-              <ul className="space-y-3 mb-6 flex-1">
-                {[
-                  `${formatMb(plan.storage_mb)} Storage`,
-                  `${formatMb(plan.bandwidth_mb)} Bandwidth`,
-                  `${plan.max_domains} Domain${plan.max_domains > 1 ? "s" : ""}`,
-                  `${plan.max_email_accounts} Email Account${plan.max_email_accounts > 1 ? "s" : ""}`,
-                  `${plan.max_databases} Database${plan.max_databases > 1 ? "s" : ""}`,
-                  ...(plan.wordpress_enabled ? ["WordPress Included"] : []),
-                ].map((feature) => (
-                  <li key={feature} className="flex items-center gap-2 text-sm">
-                    <Check className="w-4 h-4 text-accent shrink-0" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-
-              <Button
-                variant="accent"
-                className="w-full"
-                onClick={() => handleOrder(plan)}
-                disabled={!domainInput.trim()}
+          {plans.map((plan, i) => {
+            const isCurrent = isUpgrade && existingAccount?.plan_id === plan.id;
+            return (
+              <motion.div
+                key={plan.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.1 }}
+                className={`bg-card rounded-xl border p-6 flex flex-col transition-all ${
+                  isCurrent
+                    ? "border-accent/40 shadow-md ring-1 ring-accent/20"
+                    : "border-border hover:border-accent/30 hover:shadow-lg"
+                }`}
               >
-                Order Now
-                <ArrowRight className="w-4 h-4 ml-1" />
-              </Button>
-            </motion.div>
-          ))}
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="font-display font-bold text-xl">{plan.name}</h3>
+                  {isCurrent && (
+                    <Badge className="bg-accent/10 text-accent border-accent/20 text-[10px]">Current Plan</Badge>
+                  )}
+                  {!isCurrent && plan.is_recommended && (
+                    <Badge className="bg-accent text-accent-foreground text-[10px]">Recommended</Badge>
+                  )}
+                </div>
+                {plan.description && (
+                  <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
+                )}
+                <div className="mb-6">
+                  <span className="text-3xl font-display font-bold">
+                    KES {getPrice(plan).toLocaleString()}
+                  </span>
+                  <span className="text-muted-foreground text-sm">/{billingCycle === "yearly" ? "yr" : "mo"}</span>
+                </div>
+
+                <ul className="space-y-3 mb-6 flex-1">
+                  {[
+                    `${formatMb(plan.storage_mb)} Storage`,
+                    `${formatMb(plan.bandwidth_mb)} Bandwidth`,
+                    `${plan.max_domains} Domain${plan.max_domains > 1 ? "s" : ""}`,
+                    `${plan.max_email_accounts} Email Account${plan.max_email_accounts > 1 ? "s" : ""}`,
+                    `${plan.max_databases} Database${plan.max_databases > 1 ? "s" : ""}`,
+                    ...(plan.wordpress_enabled ? ["WordPress Included"] : []),
+                  ].map((feature) => (
+                    <li key={feature} className="flex items-center gap-2 text-sm">
+                      <Check className="w-4 h-4 text-accent shrink-0" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+
+                <Button
+                  variant={isCurrent ? "outline" : "accent"}
+                  className="w-full"
+                  onClick={() => handleOrder(plan)}
+                  disabled={isCurrent || (!isUpgrade && !domainInput.trim())}
+                >
+                  {isCurrent ? (
+                    "Current Plan"
+                  ) : isUpgrade ? (
+                    <>
+                      <ArrowUpCircle className="w-4 h-4 mr-1" />
+                      Upgrade to {plan.name}
+                    </>
+                  ) : (
+                    <>
+                      Order Now
+                      <ArrowRight className="w-4 h-4 ml-1" />
+                    </>
+                  )}
+                </Button>
+              </motion.div>
+            );
+          })}
         </div>
       )}
     </div>
