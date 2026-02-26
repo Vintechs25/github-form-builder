@@ -2,6 +2,7 @@ import { useState, useEffect, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Loader2, Wrench } from "lucide-react";
 
 interface MaintenanceGuardProps {
@@ -11,6 +12,8 @@ interface MaintenanceGuardProps {
 const MaintenanceGuard = ({ children }: MaintenanceGuardProps) => {
   const { user, loading: authLoading } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [maintenance, setMaintenance] = useState<{ enabled: boolean; message: string } | null>(null);
   const [checking, setChecking] = useState(true);
 
@@ -32,7 +35,6 @@ const MaintenanceGuard = ({ children }: MaintenanceGuardProps) => {
 
     fetchMaintenance();
 
-    // Subscribe to realtime changes on platform_settings
     const channel = supabase
       .channel("maintenance-mode")
       .on(
@@ -67,7 +69,10 @@ const MaintenanceGuard = ({ children }: MaintenanceGuardProps) => {
     );
   }
 
-  if (maintenance?.enabled && !isAdmin) {
+  // Allow auth pages through so admins can log in during maintenance
+  const isAuthPage = location.pathname === "/login" || location.pathname === "/signup";
+
+  if (maintenance?.enabled && !isAdmin && !isAuthPage) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
         <div className="max-w-md w-full text-center space-y-6">
@@ -82,6 +87,31 @@ const MaintenanceGuard = ({ children }: MaintenanceGuardProps) => {
           </div>
           <div className="pt-4 border-t border-border">
             <p className="text-xs text-muted-foreground">We apologize for the inconvenience.</p>
+          </div>
+          <button
+            onClick={() => navigate("/login")}
+            className="text-[10px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors"
+          >
+            Admin access
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // If user just logged in during maintenance and is NOT admin, redirect them away
+  if (maintenance?.enabled && user && !isAdmin && isAuthPage) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <div className="max-w-md w-full text-center space-y-6">
+          <div className="mx-auto w-16 h-16 rounded-2xl bg-destructive/10 flex items-center justify-center">
+            <Wrench className="w-8 h-8 text-destructive" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-2xl font-display font-bold text-foreground">Under Maintenance</h1>
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              Only administrators can access the platform during maintenance.
+            </p>
           </div>
         </div>
       </div>
